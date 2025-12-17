@@ -9,6 +9,7 @@ interface IUser extends Document{
 }
 
 export interface AuthenticatedRequest extends Request{
+    userId: any;
     user?: IUser|null;
 }
 

@@ -1,5 +1,5 @@
-import TryCatch from "./config/TryCatch.js";
-import { Chat } from "./models/Chat.js";
+import TryCatch from "../config/TryCatch.js";
+import { Chat } from "../models/Chat.js";
 export const createNewChat = TryCatch(async (req, res) => {
     const userId = req.user?._id;
     const { otherUserId } = req.body;
