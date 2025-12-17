@@ -14,4 +14,4 @@ export declare const Chat: mongoose.Model<IChat, {}, {}, {}, Document<unknown, {
 }> & {
     __v: number;
 }, any, IChat>;
-//# sourceMappingURL=chat.d.ts.map
+//# sourceMappingURL=Chat.d.ts.map
