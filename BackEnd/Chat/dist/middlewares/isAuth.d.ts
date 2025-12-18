@@ -5,6 +5,7 @@ interface IUser extends Document {
     email: string;
 }
 export interface AuthenticatedRequest extends Request {
+    userId?: string;
     user?: IUser | null;
 }
 export declare const isAuth: (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>;
