@@ -7,10 +7,10 @@ const VerifyPage = () => {
     const [loading, setloading] = useState(false)
     const[otp , setotp] = useState<string[]>(["","","","","",""])
     const[error,setError]=useState<string>("")
-    const[recentLoading,setResentLoading] = useState(false)
+    const[resendLoading,setResendLoading] = useState(false)
     const[timer,setTimer] = useState(60);
     
-    const inputRefs = useRef<Array<HTMLInputElement>>([])
+    const inputRefs = useRef<Array<HTMLInputElement | null >>([])
 
     useEffect(()=>{
         if(timer>0){
@@ -34,7 +34,22 @@ const VerifyPage = () => {
         }
     };
 
+    const handleKeyDown = (index: number , e: React.KeyboardEvent<HTMLElement>): void=>{
+        if(e.key==="Backspace" && !otp[index]&&index>0){
+            inputRefs.current[index-1]?.focus()
+        }
+    };
     
+    const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>): void=>{
+        e.preventDefault()
+        const pastedData = e.clipboardData.getData("text")
+        const digits = pastedData.replace(/\D/g,"").slice(0,6);
+        if(digits.length===6){
+            const newOtp = digits.split("")
+            setotp(newOtp)
+            inputRefs.current[5]?.focus();
+        }
+    }
 
     console.log(timer);
 
@@ -64,21 +79,34 @@ const VerifyPage = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-300 mb-2"
+                className="block text-sm font-medium text-gray-300 mb-4 text-center"
               >
-                Email Address
+                Enter Your 6-digit otp here
               </label>
-              <input
-                type="email"
-                id="email"
-                className="w-full px-4 py-4 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400"
-                placeholder="Enter Your email address"
-                //value={email}
-                //onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <div className="flex justify-center in-checked: space-x-3">
+                {
+                    otp.map((digit,index)=>(
+                        <input key={index} ref={(el:HTMLInputElement | null)=>{
+                            inputRefs.current[index] = el;
+                        }} 
+                        type='text'
+                        maxLength={1}
+                        value={digit}
+                        onChange={e=>handleInputChange(index, e.target.value)}
+                        onKeyDown={e=>{handleKeyDown(index,e)}}
+                        onPaste={index===0? handlePaste: undefined}
+                        className='w-12 h-12 text-center text-x1 font-bold border-2 border-gray-600 rounded-lg bg-gray-700'
+                        />
+                    ))
+                }
+
+              </div>
             </div>
+            {
+                error && <div className='bg-red-900 border-red-700 rounded-lg p-3' >
+                    <p className='text-red-300 text-sm text-center'>(error)</p>
+                </div>
+            }
             <button
               type="submit"
               className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -97,6 +125,18 @@ const VerifyPage = () => {
               )}
             </button>
           </form>
+
+          <div className="mt-6 text-center">
+            <p className='text-gray-400 text-sm mb-4'>Did not recieve the code</p>
+            {
+                timer>0 ? (<p className='text-gray-400 text-sm'>Resend Code in {timer} seconds</p>
+                ) : (
+                <button className='text-blue-400 hover:text-blue-300 font-medium text-sm disabled:opacity-50' 
+                disabled={resendLoading} 
+                >
+                    {resendLoading?"Sending" : "Resend Code"}</button>)
+            }
+          </div>
         </div>
       </div>
     </div>
