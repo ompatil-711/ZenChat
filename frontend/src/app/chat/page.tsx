@@ -1,11 +1,11 @@
 import React from 'react'
 
-const page = () => {
+const ZenChat = () => {
   return (
     <div>
-      <h1>Page</h1>
+      <h1>Zenchat</h1>
     </div>
   )
 }
 
-export default page
+export default ZenChat
