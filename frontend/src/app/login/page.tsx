@@ -1,5 +1,6 @@
 "use client";
 
+import { user_service } from "@/context/AppContext";
 import axios from "axios";
 import { ArrowRight, Loader2, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -17,7 +18,7 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      const { data } = await axios.post(`http://localhost:5000/api/v1/login`, {
+      const { data } = await axios.post(`${user_service}/api/v1/login`, {
         email,
       });
       alert(data.message);

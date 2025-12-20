@@ -4,6 +4,7 @@ import { ArrowRight, ChevronLeft, Loader2, Lock } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import React, { useState, useRef, useEffect } from "react";
 import Cookies from 'js-cookie';
+import { user_service } from '@/context/AppContext';
 
 const VerifyPage = () => {
     const [loading, setloading] = useState(false)
@@ -71,7 +72,7 @@ const VerifyPage = () => {
     setloading(true);
 
     try {
-      const { data } = await axios.post(`http://localhost:5000/api/v1/verify`, {
+      const { data } = await axios.post(`${user_service}/api/v1/verify`, {
                 email,
                 otp: otpString,
             });
@@ -95,7 +96,7 @@ const VerifyPage = () => {
     setResendLoading(true)
     setError("")
     try {
-      const { data } = await axios.post(`http://localhost:5000/api/v1/login`, {
+      const { data } = await axios.post(`${user_service}/api/v1/login`, {
                 email,
             });
       alert(data.message)
@@ -113,7 +114,7 @@ const VerifyPage = () => {
       <div className="max-w-md w-full">
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-8">
           <div className="text-center mb-8 relative">
-            <button className='absolute top-0 left-0 p-2 text-gray hover: text-white'><ChevronLeft/></button>
+            <button className='absolute top-0 left-0 p-2 text-shadow-gray-800 hover: text-white' onClick={()=>{router.push("/login")}}><ChevronLeft className='w-6 h-6'/></button>
             <div className="mx-auto w-20 h-20 bg-blue-600 rounded-lg flex items-center justify-center mb-6">
               <Lock size={40} className="text-white" />
             </div>
