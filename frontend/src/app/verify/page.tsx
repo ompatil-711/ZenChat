@@ -1,11 +1,13 @@
 "use client"
+import axios from 'axios';
 import { ArrowRight, Loader2, Lock } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import React, { useState, useRef, useEffect } from "react";
+import Cookies from 'js-cookie';
 
-const VerifyPage = () => {
+const VerifyPage = async () => {
     const [loading, setloading] = useState(false)
-    const[otp , setotp] = useState<string[]>(["","","","","",""])
+    const[otp , setOtp] = useState<string[]>(["","","","","",""])
     const[error,setError]=useState<string>("")
     const[resendLoading,setResendLoading] = useState(false)
     const[timer,setTimer] = useState(60);
@@ -26,7 +28,7 @@ const VerifyPage = () => {
 
         const newOtp = [...otp]
         newOtp[index] = value
-        setotp(newOtp)
+        setOtp(newOtp)
         setError("")
 
         if(value && index <5){
@@ -46,7 +48,7 @@ const VerifyPage = () => {
         const digits = pastedData.replace(/\D/g,"").slice(0,6);
         if(digits.length===6){
             const newOtp = digits.split("")
-            setotp(newOtp)
+            setOtp(newOtp)
             inputRefs.current[5]?.focus();
         }
     }
@@ -58,7 +60,47 @@ const VerifyPage = () => {
     const SearchParams = useSearchParams()
 
     const email: string = SearchParams.get("email") ||  ""
-    const handleSubmit = async()=>{}
+    const handleSubmit = async(e: React.FormEvent<HTMLFormElement>)=>{
+      e.preventDefault()
+      const otpString = otp.join("")
+      if(otpString.length!==6){
+        setError("Please Enter all 6 digits");
+        return;
+      }
+      setError("");
+    setloading(true);
+
+    try {
+      const {data} = await axios.post(`https://loacalhost:5000/api/v1/verify`,{
+        email,
+        otp: otpString,
+      });
+      alert(data.message)
+      Cookies.set("token",data.token,{
+        expires: 15,
+        secure: false,
+        path: "/"
+      });
+      setOtp(["","","","","",""]);
+      inputRefs.current[0]?.focus();
+
+    } catch (error: any) {
+      setError(error.response.data.message)
+    }finally{
+      setloading(false);
+    }
+  };
+
+  const handleResendOtp = async()=>{
+    setResendLoading(true)
+    setError("")
+    try {
+      
+    } catch (error) {
+      
+    }
+  }
+    
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -104,7 +146,7 @@ const VerifyPage = () => {
             </div>
             {
                 error && <div className='bg-red-900 border-red-700 rounded-lg p-3' >
-                    <p className='text-red-300 text-sm text-center'>(error)</p>
+                    <p className='text-red-300 text-sm text-center'>{error}</p>
                 </div>
             }
             <button
