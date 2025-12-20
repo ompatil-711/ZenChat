@@ -1,11 +1,11 @@
 "use client"
 import axios from 'axios';
-import { ArrowRight, Loader2, Lock } from 'lucide-react'
+import { ArrowRight, ChevronLeft, Loader2, Lock } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import React, { useState, useRef, useEffect } from "react";
 import Cookies from 'js-cookie';
 
-const VerifyPage = async () => {
+const VerifyPage = () => {
     const [loading, setloading] = useState(false)
     const[otp , setOtp] = useState<string[]>(["","","","","",""])
     const[error,setError]=useState<string>("")
@@ -71,10 +71,10 @@ const VerifyPage = async () => {
     setloading(true);
 
     try {
-      const {data} = await axios.post(`https://loacalhost:5000/api/v1/verify`,{
-        email,
-        otp: otpString,
-      });
+      const { data } = await axios.post(`http://localhost:5000/api/v1/verify`, {
+                email,
+                otp: otpString,
+            });
       alert(data.message)
       Cookies.set("token",data.token,{
         expires: 15,
@@ -95,9 +95,16 @@ const VerifyPage = async () => {
     setResendLoading(true)
     setError("")
     try {
-      
-    } catch (error) {
-      
+      const { data } = await axios.post(`http://localhost:5000/api/v1/login`, {
+                email,
+            });
+      alert(data.message)
+      setTimer(60)
+    } catch (error: any) {
+    const errorMessage = error.response?.data?.message || "Something went wrong. Please try again.";
+    setError(errorMessage);    
+  }finally{
+      setResendLoading(false);
     }
   }
     
@@ -105,7 +112,8 @@ const VerifyPage = async () => {
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-8">
-          <div className="text-center mb-8">
+          <div className="text-center mb-8 relative">
+            <button className='absolute top-0 left-0 p-2 text-gray hover: text-white'><ChevronLeft/></button>
             <div className="mx-auto w-20 h-20 bg-blue-600 rounded-lg flex items-center justify-center mb-6">
               <Lock size={40} className="text-white" />
             </div>
@@ -174,7 +182,8 @@ const VerifyPage = async () => {
                 timer>0 ? (<p className='text-gray-400 text-sm'>Resend Code in {timer} seconds</p>
                 ) : (
                 <button className='text-blue-400 hover:text-blue-300 font-medium text-sm disabled:opacity-50' 
-                disabled={resendLoading} 
+                disabled={resendLoading}
+                onClick={handleResendOtp} 
                 >
                     {resendLoading?"Sending" : "Resend Code"}</button>)
             }
