@@ -63,12 +63,12 @@ const ZenChat = () => {
         sidebarOpen={siderbarOpen}
         setSidebarOpen={setSiderbarOpen}
         showAllUsers={showAllUser}
-        setShowAllUser={setShowAllUser}
+        setShowAllUsers={setShowAllUser}
         users={users}
         loggedInUser={loggedInUser}
         chats={chats}
         selectedUser={selectedUser}
-        setselectedUser={setSelectedUser}
+        setSelectedUser={setSelectedUser}
         handleLogout={handleLogout}
         />
     </div>

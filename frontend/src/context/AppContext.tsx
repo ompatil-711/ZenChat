@@ -3,7 +3,7 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import Cookies from 'js-cookie';
 import axios from "axios";
-import{ Toaster } from 'react-hot-toast'
+import { Toaster } from 'react-hot-toast'
 import toast from "react-hot-toast/headless";
 
 export const user_service = "http://localhost:5000"
@@ -25,7 +25,6 @@ export interface Chat{
     createdAt: string;
     updatedAt: string;
     unseesCount?: number;
-
 }
 
 export interface Chats{
@@ -59,18 +58,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
     const [isAuth, setIsAuth] = useState(false)
     const [loading, setLoading] =useState(true)
 
+    // 1. FIXED: This fetches YOUR profile. URL must be /me
     async function fetchUser(){
         try {
             const token = Cookies.get("token")
 
-            // 👇 CHECK 1: If no token, stop loading and return
             if (!token) {
                 setLoading(false);
                 return;
             }
 
-            // 👇 CHECK 2: Fixed typo '/vi/' to '/v1/'
-            const {data} = await axios.get(`${user_service}/api/v1/user/all`,{
+            // 👇 CORRECTED: Changed '/api/v1/user/all' to '/api/v1/user/me'
+            const {data} = await axios.get(`${user_service}/api/v1/user/me`,{
                 headers:{
                     Authorization: `Bearer ${token}`,
                 }
@@ -83,7 +82,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
             setIsAuth(false);
             setUser(null);
         } finally {
-            
             setLoading(false);
         }
     }
@@ -96,46 +94,50 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
     }
 
     const [chats, setChats] = useState<Chats[] | null>(null)
-        async function fetchChats() {
-            const token = Cookies.get("token")
-            try {
-                const {data} = await axios.get(`${chat_service}/api/v1/chat/all`,{
-                    headers:{
-                        Authorization: `Bearer ${token}`,
-                    },
-                });
+    
+    // 2. FIXED: This fetches chat list. URL must be /all
+    async function fetchChats() {
+        const token = Cookies.get("token")
+        try {
+            // 👇 CORRECTED: Changed '/api/v1/chat/me' to '/api/v1/chat/all'
+            const {data} = await axios.get(`${chat_service}/api/v1/chat/all`,{
+                headers:{
+                    Authorization: `Bearer ${token}`,
+                },
+            });
 
-                setChats(data.chats);
-            } catch (error) {
-                console.log(error);
-                
-            }
+            setChats(data.chats);
+        } catch (error) {
+            console.log(error);
         }
+    }
 
-        const[users,setUsers] = useState<User[]|null>(null)
+    const[users,setUsers] = useState<User[]|null>(null)
 
-        async function fetchUsers(){
-            const token = Cookies.get("token")
-            if (!token) {
-                setLoading(false);
-                return;
-            }
-            try {
-                const {data} = await axios.get(`${user_service}/api/v1/user/me`,{
-                    headers:{
-                        Authorization: `Bearer ${token}`
-                    }
-                })
-
-                setUsers(data)
-            } catch (error) {
-                
-            }
+    // 3. This one was actually correct (fetches the sidebar list)
+    async function fetchUsers(){
+        const token = Cookies.get("token")
+        if (!token) {
+            setLoading(false);
+            return;
         }
-        useEffect(()=>{
-            fetchUser();
-            fetchChats();
-            fetchUsers();
+        try {
+            const {data} = await axios.get(`${user_service}/api/v1/user/all`,{
+                headers:{
+                    Authorization: `Bearer ${token}`
+                }
+            })
+
+            setUsers(data)
+        } catch (error) {
+            console.log(error);
+        }
+    }
+
+    useEffect(()=>{
+        fetchUser();
+        fetchChats();
+        fetchUsers();
     },[])
 
     return (
