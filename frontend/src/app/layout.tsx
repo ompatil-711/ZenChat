@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AppProvider } from "@/context/AppContext";
 
 export const metadata: Metadata = {
   title: "ZenChat",
@@ -16,7 +17,8 @@ export default function RootLayout({
       <body
         
       >
-        {children}
+        <AppProvider>{children}</AppProvider>
+        
       </body>
     </html>
   );

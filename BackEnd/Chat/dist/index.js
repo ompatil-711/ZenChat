@@ -2,10 +2,17 @@ import express from 'express';
 import dotenv from 'dotenv';
 import connectDb from './config/db.js';
 import chatRoutes from './routes/chat.js';
+import cors from 'cors';
 dotenv.config();
 // 1. Connect Database
 connectDb();
 const app = express();
+app.use(cors({
+    origin: "http://localhost:3000", // Allow your Next.js Frontend
+    credentials: true, // Allow cookies/tokens to be sent
+    methods: ["GET", "POST", "PUT", "DELETE"]
+}));
+app.use(express.json());
 // 2. CRITICAL FIX: Middleware MUST come before Routes!
 app.use(express.json());
 // 3. FIX: Match the URL to your Postman request

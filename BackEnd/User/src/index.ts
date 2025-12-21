@@ -18,13 +18,16 @@ redisClient.on('error', (err) => console.log('Redis Client Error', err));
 const app = express();
 
 // 2. FIXED: cors() must be a function call!
-app.use(cors()); 
-
+app.use(cors()); app.use(cors({
+  origin: "http://localhost:3000", 
+  credentials: true, 
+  methods: ["GET", "POST", "PUT", "DELETE"]
+}));
 // 3. JSON Middleware
 app.use(express.json());
 
 // 4. Routes (Note: Your URL is now http://localhost:PORT/api/v1/...)
-app.use("/api/v1", userRoutes);
+app.use("/api/v1/user", userRoutes);
 
 const port = process.env.PORT || 5000;
 
