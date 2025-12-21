@@ -1,5 +1,5 @@
 import express from "express";
-import { loginUser, myProfile, verifyUser , getAllUsers} from "../controllers/user.js";
+import { loginUser, myProfile, verifyUser , getAllUsers , getAUser} from "../controllers/user.js";
 import { isAuth } from "../middleware/isAuth.js";
 
  const router = express.Router();
@@ -9,5 +9,7 @@ import { isAuth } from "../middleware/isAuth.js";
  router.get("/me", isAuth,myProfile)
 
  router.get("/all", isAuth, getAllUsers);
+
+ router.get("/:id", getAUser);
 
  export default router;
