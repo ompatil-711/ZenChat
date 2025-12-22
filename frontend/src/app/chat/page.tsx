@@ -9,6 +9,7 @@ import { SidebarOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Cookies from 'js-cookie';
 import axios from 'axios';
+import ChatHeader from '@/components/ChatHeader';
 
 export interface Message{
   _id: string;
@@ -58,6 +59,28 @@ const ZenChat = () => {
     logoutUser()
   }
 
+  async function fetchChat() {
+    const token = Cookies.get("token");
+    try {
+      const token = Cookies.get("token");
+      const {data} = await axios.get(
+        `${chat_service}/api/v1/chat/message/${selectedUser}`,
+        {
+          headers:{
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      setMessages(data.messages)
+      setUser(data.user)
+      await fetchChats()
+    } catch (error) {
+      console.log(error);
+      toast.error("Failed to load message")
+    }
+  }
+
   async function createChat(u: User){
     try {
       const token = Cookies.get("token")
@@ -78,6 +101,11 @@ const ZenChat = () => {
     }
   }
 
+  useEffect(()=>{
+    if(selectedUser){
+      fetchChat()
+    }
+  },[selectedUser])
   if(loading) return <Loading/>
   if(!isAuth) return null
   return (
@@ -96,6 +124,7 @@ const ZenChat = () => {
         createChat={createChat}
         />
         <div className="flex-1 flex flex-col justify-between p-4 backdrop-blur-x1 bg-white/5 border-white/10"></div>
+        <ChatHeader user={user} setSidebarOpen={setSiderbarOpen} isTyping={isTyping}/>
     </div >
   )
 }
