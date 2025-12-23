@@ -17,7 +17,6 @@ const ChatMessages = ({
 }: ChatMessagesProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  //   seen feature
   const uniqueMessages = useMemo(() => {
     if (!messages) return [];
     const seen = new Set();
@@ -33,6 +32,7 @@ const ChatMessages = ({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selectedUser, uniqueMessages]);
+
   return (
     <div className="flex-1 overflow-hidden">
       <div className="h-full max-h-[calc(100vh-215px)] overflow-y-auto p-2 space-y-2 custom-scroll">
@@ -45,6 +45,14 @@ const ChatMessages = ({
             {uniqueMessages.map((e, i) => {
               const isSentByMe = e.sender === loggedInUser?._id;
               const uniqueKey = `${e._id}-${i}`;
+
+              // We cast to any to safely inspect all fields
+              const msgData = e as any;
+              
+              // Try to find the image for rendering (best guess)
+              const imageUrl = msgData.image 
+                ? (typeof msgData.image === 'string' ? msgData.image : msgData.image.url) 
+                : (msgData.imageUrl || msgData.fileUrl || null);
 
               return (
                 <div
@@ -60,34 +68,44 @@ const ChatMessages = ({
                         : "bg-gray-700 text-white"
                     }`}
                   >
-                    {e.messageType === "image" && e.image && (
-                      <div className="relative group">
-                        <img
-                          src={e.image.url}
-                          alt="shared image"
-                          className="max-w-full h-auto rounded-lg"
-                        />
+                    {/* --- DEBUG MODE: PRINT RAW DATA --- */}
+                    {e.messageType === "image" && !imageUrl && (
+                      <div className="text-[10px] font-mono bg-black/50 p-2 rounded mb-2 break-all text-yellow-300">
+                         <strong>Raw Backend Data:</strong>
+                         <pre className="whitespace-pre-wrap">
+                           {JSON.stringify(e, null, 2)}
+                         </pre>
                       </div>
+                    )}
+                    
+                    {/* Render Image if found */}
+                    {e.messageType === "image" && imageUrl && (
+                        <div className="relative group mb-1">
+                          <img
+                            src={imageUrl}
+                            alt="shared"
+                            className="max-w-full h-auto rounded-lg"
+                          />
+                        </div>
                     )}
 
                     {e.text && <p className="mt-1">{e.text}</p>}
                   </div>
 
+                  {/* Footer (Time/Seen) */}
                   <div
                     className={`flex items-center gap-1 text-xs text-gray-400 ${
                       isSentByMe ? "pr-2 flex-row-reverse" : "pl-2"
                     }`}
                   >
-                    <span>{moment(e.createdAt).format("hh:mm A . MMM D")}</span>
-
+                    <span>
+                      {moment(e.createdAt).format("hh:mm A . MMM D")}
+                    </span>
                     {isSentByMe && (
                       <div className="flex items-center ml-1">
                         {e.seen ? (
                           <div className="flex items-center gap-1 text-blue-400">
                             <CheckCheck className="w-3 h-3" />
-                            {e.seenAt && (
-                              <span>{moment(e.seenAt).format("hh:mm A")}</span>
-                            )}
                           </div>
                         ) : (
                           <Check className="w-3 h-3 text-gray-500" />

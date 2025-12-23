@@ -45,6 +45,7 @@ interface AppContextType{
     chats: Chats[] | null;
     users: User[] | null;
     setChats: React.Dispatch<React.SetStateAction<Chats[] | null>>;
+    onlineUsers: string[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -59,6 +60,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
     const [loading, setLoading] =useState(true)
 
     // 1. FIXED: This fetches YOUR profile. URL must be /me
+    
+    const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+
     async function fetchUser(){
         try {
             const token = Cookies.get("token")
@@ -141,7 +145,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
     },[])
 
     return (
-        <AppContext.Provider  value={{user,setUser, isAuth, setIsAuth,loading,logoutUser,fetchChats,fetchUsers,users,chats,setChats}}>{children}<Toaster/></AppContext.Provider>
+        <AppContext.Provider  value={{user,setUser, isAuth, setIsAuth,loading,logoutUser,fetchChats,fetchUsers,users,chats,setChats,onlineUsers}}>{children}<Toaster/></AppContext.Provider>
     )
 }
 

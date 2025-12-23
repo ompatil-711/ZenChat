@@ -92,6 +92,13 @@ export const sendMessage = TryCatch(async(req: AuthenticatedRequest, res) => {
     const { chatId, text } = req.body;
     const imageFile = req.file;
 
+    // --- DEBUG LOG: Check if backend received the file ---
+    if(imageFile) {
+        console.log("📸 Uploaded File Object:", imageFile);
+    } else {
+        console.log("⚠️ No file received in sendMessage controller");
+    }
+
     if (!senderId) {
         res.status(401).json({ message: "unauthorised" });
         return;
@@ -138,20 +145,33 @@ export const sendMessage = TryCatch(async(req: AuthenticatedRequest, res) => {
     };
 
     if (imageFile) {
+        // FIX: Robustly extract file URL and ID
+        // Checks 'path' (local/standard), 'location' (S3), 'secure_url' (Cloudinary)
+        const fileUrl = imageFile.path || (imageFile as any).location || (imageFile as any).secure_url || (imageFile as any).url;
+        const fileId = imageFile.filename || (imageFile as any).id || (imageFile as any).public_id;
+
+        if (!fileUrl) {
+            console.error("❌ CRITICAL ERROR: Could not find URL in req.file object");
+        }
+
         messageData.image = {
-            url: imageFile.path,
-            publicId: imageFile.filename
+            url: fileUrl,
+            publicId: fileId
         };
         messageData.messageType = "image";
         messageData.text = text || "";
     } else {
         messageData.text = text;
-        // 👇 FIXED: Changed "type" to "text"
         messageData.messageType = "text"; 
     }
 
     const message = new Messages(messageData);
     const savedMessage = await message.save();
+
+    // Debugging: Verify if image URL was saved
+    if (imageFile && !savedMessage.image?.url) {
+        console.error("❌ ERROR: Message saved but image URL is missing in DB:", savedMessage);
+    }
 
     const latestMessageText = imageFile ? "📷 Image" : text;
     
