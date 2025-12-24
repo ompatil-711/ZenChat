@@ -5,21 +5,33 @@ import chatRoutes from './routes/chat.js';
 import cors from 'cors';
 import { app, server } from './config/socket.js';
 dotenv.config();
-// 1. Connect Database
-connectDb();
+// 1. CORS Configuration
+// We allow "*" so your Frontend (Localhost or Render) can connect easily
 app.use(cors({
-    origin: "http://localhost:3000", // Allow your Next.js Frontend
-    credentials: true, // Allow cookies/tokens to be sent
+    origin: "*",
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"]
 }));
+// 2. Middleware
 app.use(express.json());
-// 2. CRITICAL FIX: Middleware MUST come before Routes!
-app.use(express.json());
-// 3. FIX: Match the URL to your Postman request
-// This creates the prefix: http://localhost:PORT/api/v1/chat
+// 3. Routes
+// This creates the endpoint: https://zenchat-server.onrender.com/api/v1/chat
 app.use("/api/v1/chat", chatRoutes);
-const port = process.env.PORT || 5001; // Ensure this doesn't clash with User service (5000)
-server.listen(port, () => {
-    console.log(`✅ Server is running on port ${port}`);
-});
+const port = process.env.PORT || 5001;
+// 4. Robust Server Startup
+// Using a function ensures DB connects BEFORE the server starts
+const startServer = async () => {
+    try {
+        await connectDb();
+        console.log("✅ Connected to MongoDB (Chat Service)");
+        server.listen(port, () => {
+            console.log(`✅ Chat Server is running on port ${port}`);
+        });
+    }
+    catch (error) {
+        console.error("❌ Failed to start Chat Server:", error);
+        process.exit(1);
+    }
+};
+startServer();
 //# sourceMappingURL=index.js.map
