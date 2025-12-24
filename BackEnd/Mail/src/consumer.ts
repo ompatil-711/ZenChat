@@ -5,45 +5,48 @@ dotenv.config();
 
 export const startSendOtpConsumer = async () => {
     try {
-        // CHANGED: Use the full secure URL from Render instead of the manual object
-        // This is the only way to connect to CloudAMQP securely (amqps://)
         const connection = await amqp.connect(process.env.Rabbitmq_Host || "");
-
         const channel = await connection.createChannel();
         const queueName = "send-otp";
 
         await channel.assertQueue(queueName, { durable: true });
         console.log("✅ Mail service consumer started, listening for otp emails");
 
-        // You already added 'any' here, which is perfect!
         channel.consume(queueName, async (msg: any) => {
             if (msg) {
                 try {
                     const { to, subject, body } = JSON.parse(msg.content.toString());
                     
+                    // DEBUG: Print exactly where we are sending
+                    console.log(`📨 Attempting to send email to: [${to}]`);
+
                     const transporter = nodemailer.createTransport({
                         host: "smtp.gmail.com", 
                         port: 465,
                         auth: {
                             user: process.env.USER,
-                            // CHANGED: Updated to 'Password' (Capital P) to match your Render Env variable
                             pass: process.env.Password, 
-                        }
+                        },
+                        // ENABLE DEBUGGING LOGS
+                        logger: true,
+                        debug: true 
                     });
 
                     await transporter.sendMail({
-                        from: "ZENCHAT",
+                        // CHANGE: Use a proper format "Name <email>" to avoid Spam filters
+                        from: `"ZenChat Support" <${process.env.USER}>`,
                         to,
                         subject,
                         text: body,
                     });
                     
-                    console.log(`OTP mail sent to ${to}`);
+                    console.log(`✅ OTP mail sent successfully to ${to}`);
                     channel.ack(msg);
 
                 } catch (emailError) {
-                    console.error("Failed to send otp:", emailError);
-                    }
+                    console.error("❌ Failed to send otp:", emailError);
+                    // Do not ack if failed, so we can retry (optional)
+                }
             }
         });
 
