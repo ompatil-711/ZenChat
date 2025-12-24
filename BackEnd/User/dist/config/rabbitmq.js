@@ -1,14 +1,12 @@
 import amqp from 'amqplib';
+import dotenv from 'dotenv';
+dotenv.config();
 let channel;
 export const connectRabbitMQ = async () => {
     try {
-        const connection = await amqp.connect({
-            protocol: "amqp",
-            hostname: process.env.Rabbitmq_Host,
-            port: 5672,
-            username: process.env.Rabbitmq_Username,
-            password: process.env.Rabbitmq_Password,
-        });
+        // CHANGED: Use the full Cloud connection string from Render
+        // This replaces the manual protocol/hostname/username/password object
+        const connection = await amqp.connect(process.env.Rabbitmq_Host || "");
         channel = await connection.createChannel();
         console.log("✅ connected to rabbitmq");
     }

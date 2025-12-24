@@ -1,16 +1,14 @@
 import amqp from 'amqplib'
+import dotenv from 'dotenv';
+dotenv.config();
 
 let channel: amqp.Channel
 
 export const connectRabbitMQ = async()=>{
     try{
-        const connection = await amqp.connect({
-            protocol:"amqp",
-            hostname: process.env.Rabbitmq_Host,
-            port:5672,
-            username: process.env.Rabbitmq_Username,
-            password: process.env.Rabbitmq_Password,
-        })
+        // CHANGED: Use the full Cloud connection string from Render
+        // This replaces the manual protocol/hostname/username/password object
+        const connection = await amqp.connect(process.env.Rabbitmq_Host || "");
 
         channel = await connection.createChannel()
 
@@ -20,7 +18,7 @@ export const connectRabbitMQ = async()=>{
     }
 };
 
-export const publishtoQueue = async(queueName: string,message: any)=>{
+export const publishtoQueue = async(queueName: string, message: any)=>{
     if(!channel){
         console.log("Rabbit channel is not initallized");
         return;
@@ -28,5 +26,5 @@ export const publishtoQueue = async(queueName: string,message: any)=>{
     }
     await channel.assertQueue(queueName, {durable:true});
 
-    channel.sendToQueue(queueName,Buffer.from(JSON.stringify(message)),{persistent: true})
+    channel.sendToQueue(queueName, Buffer.from(JSON.stringify(message)), {persistent: true})
 }

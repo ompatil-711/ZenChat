@@ -3,12 +3,13 @@ import dotenv from 'dotenv';
 import connectDb from "./config/db.js";
 import { createClient } from 'redis';
 import userRoutes from "./routes/user.js";
-import { connectRabbitMQ } from "./config/rabbitmq.js";
+import { connectRabbitMQ } from "./config/rabbitmq.js"; // This imports the logic
 import cors from 'cors';
 
 dotenv.config();
 
-// 1. Export Redis Client so controllers can use it
+// 1. Redis Client 
+// (Make sure you add a REDIS_URL environment variable in Render if you use Redis)
 export const redisClient = createClient({
     url: process.env.REDIS_URL as string || 'redis://localhost:6379',
 });
@@ -17,37 +18,35 @@ redisClient.on('error', (err) => console.log('Redis Client Error', err));
 
 const app = express();
 
-// 2. FIXED: cors() must be a function call!
-app.use(cors()); app.use(cors({
-  origin: "http://localhost:3000", 
+// 2. REQUIRED UPDATE: Fix CORS to allow Render Frontend
+// Changed origin to "*" to allow your deployed frontend to access this backend
+app.use(cors({
+  origin: "*", 
   credentials: true, 
   methods: ["GET", "POST", "PUT", "DELETE"]
 }));
+
 // 3. JSON Middleware
 app.use(express.json());
 
-// 4. Routes (Note: Your URL is now http://localhost:PORT/api/v1/...)
+// 4. Routes
 app.use("/api/v1/user", userRoutes);
 
 const port = process.env.PORT || 5000;
 
-// 5. Robust Server Startup
-// We use a function to ensure DB & Redis connect BEFORE the server starts
+// 5. Server Startup
 const startServer = async () => {
     try {
-        // Connect Database
         await connectDb();
         console.log("✅ Connected to MongoDB");
 
-        // Connect Redis
         await redisClient.connect();
         console.log("✅ Connected to Redis");
 
-        // Connect RabbitMQ
+        // This calls the function in your config file
         await connectRabbitMQ();
         console.log("✅ Connected to RabbitMQ");
 
-        // Start Server only after connections are success
         app.listen(port, () => {
             console.log(`🚀 Server is running on port ${port}`);
         });
