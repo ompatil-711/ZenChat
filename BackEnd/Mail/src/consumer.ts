@@ -18,17 +18,25 @@ export const startSendOtpConsumer = async () => {
                     const { to, subject, body } = JSON.parse(msg.content.toString());
                     console.log(`📨 Attempting to send email to: [${to}]`);
 
-                    // FIX 1: Cast to 'any' to fix the TypeScript "service does not exist" error
+                    if (!process.env.USER || !process.env.Password) {
+                        console.error("❌ ERROR: USER or Password env vars are missing!");
+                        channel.ack(msg);
+                        return;
+                    }
+
+                    // FIX: Added 'as any' to force TypeScript to accept the properties
                     const transporter = nodemailer.createTransport({
-                        service: 'gmail', 
+                        host: "smtp.gmail.com",
+                        port: 465,               // SSL Port (Best for Render)
+                        secure: true,            // Must be true for 465
                         auth: {
                             user: process.env.USER,
                             pass: process.env.Password,
                         },
-                        // FIX 2: FORCE IPv4. This solves the "Timeout" on Render/Google connections.
-                        family: 4, 
-                        logger: true,
-                        debug: true 
+                        tls: {
+                            rejectUnauthorized: false
+                        },
+                        family: 4 // Force IPv4 to prevent timeouts
                     } as any);
 
                     await transporter.sendMail({
@@ -43,7 +51,6 @@ export const startSendOtpConsumer = async () => {
 
                 } catch (emailError) {
                     console.error("❌ Failed to send otp:", emailError);
-                    // ACK the message to stop the infinite retry loop
                     channel.ack(msg); 
                 }
             }
