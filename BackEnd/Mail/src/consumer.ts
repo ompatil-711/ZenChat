@@ -18,18 +18,15 @@ export const startSendOtpConsumer = async () => {
                     const { to, subject, body } = JSON.parse(msg.content.toString());
                     console.log(`📨 Attempting to send email to: [${to}]`);
 
+                    // CHANGED: Simplified configuration using 'service: gmail'
+                    // This automatically handles the correct ports (587) and security settings
                     const transporter = nodemailer.createTransport({
-                        host: "smtp.gmail.com", 
-                        port: 587,                 // CHANGED: Use Port 587 (TLS)
-                        secure: false,             // CHANGED: Must be false for Port 587
+                        service: 'gmail', 
                         auth: {
                             user: process.env.USER,
                             pass: process.env.Password, 
                         },
-                        // ADDED: Helps prevent handshake errors in cloud environments
-                        tls: {
-                            rejectUnauthorized: false
-                        },
+                        // Keep debug on so we can see if it works
                         logger: true,
                         debug: true 
                     });
