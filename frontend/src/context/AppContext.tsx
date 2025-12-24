@@ -6,8 +6,11 @@ import axios from "axios";
 import { Toaster } from 'react-hot-toast'
 import toast from "react-hot-toast/headless";
 
-export const user_service = "http://localhost:5000"
-export const chat_service = "http://localhost:5002"
+
+const DEPLOYED_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+export const user_service = DEPLOYED_URL || "http://localhost:5000";
+export const chat_service = DEPLOYED_URL || "http://localhost:5002";
 
 export interface User{
     _id: string;
