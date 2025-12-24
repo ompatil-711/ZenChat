@@ -18,15 +18,26 @@ export const startSendOtpConsumer = async () => {
                     const { to, subject, body } = JSON.parse(msg.content.toString());
                     console.log(`📨 Attempting to send email to: [${to}]`);
 
-                    // CHANGED: Simplified configuration using 'service: gmail'
-                    // This automatically handles the correct ports (587) and security settings
+                    // DEBUG: Check if variables are loaded (without revealing them)
+                    if (!process.env.USER || !process.env.Password) {
+                        console.error("❌ ERROR: USER or Password env vars are missing!");
+                        return;
+                    }
+
                     const transporter = nodemailer.createTransport({
-                        service: 'gmail', 
+                        host: "smtp.gmail.com",
+                        port: 587,              // CRITICAL: Use Port 587 for App Passwords
+                        secure: false,          // CRITICAL: Must be false for Port 587
                         auth: {
                             user: process.env.USER,
                             pass: process.env.Password, 
                         },
-                        // Keep debug on so we can see if it works
+                        tls: {
+                            rejectUnauthorized: false // Fixes "Self-signed certificate" errors on Render
+                        },
+                        // Increase timeouts to prevent "ETIMEDOUT"
+                        connectionTimeout: 20000, 
+                        socketTimeout: 20000,
                         logger: true,
                         debug: true 
                     });
