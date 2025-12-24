@@ -5,13 +5,9 @@ dotenv.config();
 
 export const startSendOtpConsumer = async () => {
     try {
-        const connection = await amqp.connect({
-            protocol: "amqp",
-            hostname: process.env.Rabbitmq_Host,
-            port: 5672,
-            username: process.env.Rabbitmq_Username,
-            password: process.env.Rabbitmq_Password,
-        });
+        // CHANGED: Use the full secure URL from Render instead of the manual object
+        // This is the only way to connect to CloudAMQP securely (amqps://)
+        const connection = await amqp.connect(process.env.Rabbitmq_Host || "");
 
         const channel = await connection.createChannel();
         const queueName = "send-otp";
@@ -19,7 +15,8 @@ export const startSendOtpConsumer = async () => {
         await channel.assertQueue(queueName, { durable: true });
         console.log("✅ Mail service consumer started, listening for otp emails");
 
-        channel.consume(queueName, async (msg) => {
+        // You already added 'any' here, which is perfect!
+        channel.consume(queueName, async (msg: any) => {
             if (msg) {
                 try {
                     const { to, subject, body } = JSON.parse(msg.content.toString());
@@ -29,7 +26,8 @@ export const startSendOtpConsumer = async () => {
                         port: 465,
                         auth: {
                             user: process.env.USER,
-                            pass: process.env.PASSWORD,
+                            // CHANGED: Updated to 'Password' (Capital P) to match your Render Env variable
+                            pass: process.env.Password, 
                         }
                     });
 
