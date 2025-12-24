@@ -4,8 +4,8 @@ import { createContext, ReactNode, useContext, useEffect, useState } from "react
 import Cookies from 'js-cookie';
 import axios from "axios";
 import { Toaster } from 'react-hot-toast'
-import toast from "react-hot-toast/headless";
-
+// FIX 1: Remove "/headless" to make UI visible
+import toast from "react-hot-toast"; 
 
 const DEPLOYED_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -49,6 +49,8 @@ interface AppContextType{
     users: User[] | null;
     setChats: React.Dispatch<React.SetStateAction<Chats[] | null>>;
     onlineUsers: string[];
+    // FIX 3: Export this so you can update it from Socket component
+    setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>; 
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -61,27 +63,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
     const [user,setUser] = useState<User | null>(null)
     const [isAuth, setIsAuth] = useState(false)
     const [loading, setLoading] =useState(true)
-
-    // 1. FIXED: This fetches YOUR profile. URL must be /me
-    
     const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+    
+    // Chats and Users State
+    const [chats, setChats] = useState<Chats[] | null>(null)
+    const[users,setUsers] = useState<User[]|null>(null)
 
     async function fetchUser(){
         try {
             const token = Cookies.get("token")
-
             if (!token) {
                 setLoading(false);
                 return;
             }
-
-            // 👇 CORRECTED: Changed '/api/v1/user/all' to '/api/v1/user/me'
             const {data} = await axios.get(`${user_service}/api/v1/user/me`,{
-                headers:{
-                    Authorization: `Bearer ${token}`,
-                }
+                headers:{ Authorization: `Bearer ${token}` }
             })
-
             setUser(data)
             setIsAuth(true);
         } catch (error) {
@@ -97,58 +94,68 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
         Cookies.remove("token")
         setUser(null);
         setIsAuth(false)
+        setChats(null); // Clear chats on logout
         toast.success("User Logged Out")
     }
 
-    const [chats, setChats] = useState<Chats[] | null>(null)
-    
-    // 2. FIXED: This fetches chat list. URL must be /all
     async function fetchChats() {
         const token = Cookies.get("token")
+        if(!token) return; // Guard clause
         try {
-            // 👇 CORRECTED: Changed '/api/v1/chat/me' to '/api/v1/chat/all'
             const {data} = await axios.get(`${chat_service}/api/v1/chat/all`,{
-                headers:{
-                    Authorization: `Bearer ${token}`,
-                },
+                headers:{ Authorization: `Bearer ${token}` },
             });
-
             setChats(data.chats);
         } catch (error) {
             console.log(error);
         }
     }
 
-    const[users,setUsers] = useState<User[]|null>(null)
-
-    // 3. This one was actually correct (fetches the sidebar list)
     async function fetchUsers(){
         const token = Cookies.get("token")
-        if (!token) {
-            setLoading(false);
-            return;
-        }
+        if (!token) return; 
         try {
             const {data} = await axios.get(`${user_service}/api/v1/user/all`,{
-                headers:{
-                    Authorization: `Bearer ${token}`
-                }
+                headers:{ Authorization: `Bearer ${token}` }
             })
-
             setUsers(data)
         } catch (error) {
             console.log(error);
         }
     }
 
+    // Initial Auth Check
     useEffect(()=>{
         fetchUser();
-        fetchChats();
-        fetchUsers();
     },[])
 
+    // FIX 2: Separate useEffect. Only fetch data when isAuth becomes true.
+    useEffect(() => {
+        if(isAuth) {
+            fetchChats();
+            fetchUsers();
+        }
+    }, [isAuth]); 
+
     return (
-        <AppContext.Provider  value={{user,setUser, isAuth, setIsAuth,loading,logoutUser,fetchChats,fetchUsers,users,chats,setChats,onlineUsers}}>{children}<Toaster/></AppContext.Provider>
+        <AppContext.Provider value={{
+            user,
+            setUser, 
+            isAuth, 
+            setIsAuth,
+            loading,
+            logoutUser,
+            fetchChats,
+            fetchUsers,
+            users,
+            chats,
+            setChats,
+            onlineUsers,
+            setOnlineUsers // Added here
+        }}>
+            {children}
+            <Toaster/>
+        </AppContext.Provider>
     )
 }
 
