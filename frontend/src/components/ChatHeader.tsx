@@ -1,4 +1,5 @@
 import { User } from "@/context/AppContext";
+import { SocketData } from "@/context/SocketContext"; // 👈 Import the hook
 import { Menu, UserCircle } from "lucide-react";
 import React from "react";
 
@@ -6,16 +7,22 @@ interface ChatHeaderProps {
   user: User | null;
   setSidebarOpen: (open: boolean) => void;
   isTyping: boolean;
-  onlineUsers: string[];
+  // onlineUsers: string[]; 👈 Removed prop
 }
 
 const ChatHeader = ({
   user,
   setSidebarOpen,
   isTyping,
-  onlineUsers,
+  // onlineUsers, 👈 Removed prop
 }: ChatHeaderProps) => {
+  
+  // 🟢 Connect directly to the live data
+  const { onlineUsers } = SocketData();
+
+  // Now this calculation happens automatically whenever onlineUsers changes
   const isOnlineUser = user && onlineUsers?.includes(user._id);
+
   return (
     <>
       {/* mobile menu toggle */}
@@ -34,10 +41,7 @@ const ChatHeader = ({
           {user ? (
             <>
               <div className="relative">
-                <div
-                  className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center
-                "
-                >
+                <div className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center">
                   <UserCircle className="w-8 h-8 text-gray-300" />
                 </div>
                 {/* online user setup */}

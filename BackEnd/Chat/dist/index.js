@@ -3,10 +3,10 @@ import dotenv from 'dotenv';
 import connectDb from './config/db.js';
 import chatRoutes from './routes/chat.js';
 import cors from 'cors';
+import { app, server } from './config/socket.js';
 dotenv.config();
 // 1. Connect Database
 connectDb();
-const app = express();
 app.use(cors({
     origin: "http://localhost:3000", // Allow your Next.js Frontend
     credentials: true, // Allow cookies/tokens to be sent
@@ -19,7 +19,7 @@ app.use(express.json());
 // This creates the prefix: http://localhost:PORT/api/v1/chat
 app.use("/api/v1/chat", chatRoutes);
 const port = process.env.PORT || 5001; // Ensure this doesn't clash with User service (5000)
-app.listen(port, () => {
+server.listen(port, () => {
     console.log(`✅ Server is running on port ${port}`);
 });
 //# sourceMappingURL=index.js.map
