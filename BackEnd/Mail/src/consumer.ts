@@ -16,24 +16,25 @@ export const startSendOtpConsumer = async () => {
             if (msg) {
                 try {
                     const { to, subject, body } = JSON.parse(msg.content.toString());
-                    
-                    // DEBUG: Print exactly where we are sending
                     console.log(`📨 Attempting to send email to: [${to}]`);
 
                     const transporter = nodemailer.createTransport({
                         host: "smtp.gmail.com", 
-                        port: 465,
+                        port: 587,                 // CHANGED: Use Port 587 (TLS)
+                        secure: false,             // CHANGED: Must be false for Port 587
                         auth: {
                             user: process.env.USER,
                             pass: process.env.Password, 
                         },
-                        // ENABLE DEBUGGING LOGS
+                        // ADDED: Helps prevent handshake errors in cloud environments
+                        tls: {
+                            rejectUnauthorized: false
+                        },
                         logger: true,
                         debug: true 
                     });
 
                     await transporter.sendMail({
-                        // CHANGE: Use a proper format "Name <email>" to avoid Spam filters
                         from: `"ZenChat Support" <${process.env.USER}>`,
                         to,
                         subject,
@@ -45,7 +46,6 @@ export const startSendOtpConsumer = async () => {
 
                 } catch (emailError) {
                     console.error("❌ Failed to send otp:", emailError);
-                    // Do not ack if failed, so we can retry (optional)
                 }
             }
         });
