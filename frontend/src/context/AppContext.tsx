@@ -4,13 +4,14 @@ import { createContext, ReactNode, useContext, useEffect, useState } from "react
 import Cookies from 'js-cookie';
 import axios from "axios";
 import { Toaster } from 'react-hot-toast'
-// FIX 1: Remove "/headless" to make UI visible
 import toast from "react-hot-toast"; 
 
-const DEPLOYED_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+// FIX: Allow separate URLs for User and Chat services in production
+const USER_URL = process.env.NEXT_PUBLIC_USER_BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+const CHAT_URL = process.env.NEXT_PUBLIC_CHAT_BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
 
-export const user_service = DEPLOYED_URL || "http://localhost:5000";
-export const chat_service = DEPLOYED_URL || "http://localhost:5002";
+export const user_service = USER_URL || "http://localhost:5000";
+export const chat_service = CHAT_URL || "http://localhost:5002";
 
 export interface User{
     _id: string;
@@ -21,7 +22,8 @@ export interface User{
 export interface Chat{
     _id: string;
     users: string[];
-    latestMessage:{
+    // FIX: Added '?' because new chats might not have a message yet
+    latestMessage?:{ 
         text: string,
         sender: string;
     };
@@ -48,9 +50,6 @@ interface AppContextType{
     chats: Chats[] | null;
     users: User[] | null;
     setChats: React.Dispatch<React.SetStateAction<Chats[] | null>>;
-    onlineUsers: string[];
-    // FIX 3: Export this so you can update it from Socket component
-    setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>; 
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -63,7 +62,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
     const [user,setUser] = useState<User | null>(null)
     const [isAuth, setIsAuth] = useState(false)
     const [loading, setLoading] =useState(true)
-    const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
     
     // Chats and Users State
     const [chats, setChats] = useState<Chats[] | null>(null)
@@ -94,13 +92,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
         Cookies.remove("token")
         setUser(null);
         setIsAuth(false)
-        setChats(null); // Clear chats on logout
+        setChats(null); 
         toast.success("User Logged Out")
     }
 
     async function fetchChats() {
         const token = Cookies.get("token")
-        if(!token) return; // Guard clause
+        if(!token) return; 
         try {
             const {data} = await axios.get(`${chat_service}/api/v1/chat/all`,{
                 headers:{ Authorization: `Bearer ${token}` },
@@ -129,7 +127,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
         fetchUser();
     },[])
 
-    // FIX 2: Separate useEffect. Only fetch data when isAuth becomes true.
+    // Fetch data only when authenticated
     useEffect(() => {
         if(isAuth) {
             fetchChats();
@@ -150,8 +148,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({children})=>{
             users,
             chats,
             setChats,
-            onlineUsers,
-            setOnlineUsers // Added here
         }}>
             {children}
             <Toaster/>
