@@ -18,27 +18,18 @@ export const startSendOtpConsumer = async () => {
                     const { to, subject, body } = JSON.parse(msg.content.toString());
                     console.log(`📨 Attempting to send email to: [${to}]`);
 
-                    if (!process.env.USER || !process.env.Password) {
-                        console.error("❌ ERROR: USER or Password env vars are missing!");
-                        // We ack here to remove the bad message and prevent retries
-                        channel.ack(msg);
-                        return;
-                    }
-
-                    // FIX: Pure SMTP configuration (No 'service' property to avoid TS errors)
+                    // FIX 1: Cast to 'any' to fix the TypeScript "service does not exist" error
                     const transporter = nodemailer.createTransport({
-                        host: "smtp.googlemail.com", // Alternate Google host
-                        port: 587,
-                        secure: false, // Must be false for port 587
+                        service: 'gmail', 
                         auth: {
                             user: process.env.USER,
                             pass: process.env.Password,
                         },
-                        tls: {
-                            rejectUnauthorized: false // Fixes Render certificate issues
-                        },
-                        connectionTimeout: 20000, // 20 seconds
-                    });
+                        // FIX 2: FORCE IPv4. This solves the "Timeout" on Render/Google connections.
+                        family: 4, 
+                        logger: true,
+                        debug: true 
+                    } as any);
 
                     await transporter.sendMail({
                         from: `"ZenChat Support" <${process.env.USER}>`,
@@ -52,9 +43,7 @@ export const startSendOtpConsumer = async () => {
 
                 } catch (emailError) {
                     console.error("❌ Failed to send otp:", emailError);
-                    
-                    // CRITICAL: We acknowledge the message even on failure.
-                    // This STOPS the infinite loop that was causing Google to block you.
+                    // ACK the message to stop the infinite retry loop
                     channel.ack(msg); 
                 }
             }
