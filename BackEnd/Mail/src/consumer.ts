@@ -3,14 +3,21 @@ import { Resend } from 'resend';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Initialize Resend with the API Key
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export const startSendOtpConsumer = async () => {
     try {
-        const url = process.env.Rabbitmq_Host || "";
-        console.log(`🔌 Connecting to RabbitMQ...`);
+        console.log("🔌 Connecting to RabbitMQ...");
 
+        // --- DEBUGGING: Check if Key Exists ---
+        if (!process.env.RESEND_API_KEY) {
+            console.error("❌ CRITICAL ERROR: RESEND_API_KEY is undefined!");
+            console.error("👉 Please check your Render Dashboard > Environment Variables.");
+            return; // Stop here to prevent crash
+        }
+        
+        // --- FIX: Initialize Resend INSIDE the function ---
+        const resend = new Resend(process.env.RESEND_API_KEY);
+
+        const url = process.env.Rabbitmq_Host || "";
         const connection = await amqp.connect(url);
         const channel = await connection.createChannel();
         const queueName = "send-otp";
@@ -24,9 +31,8 @@ export const startSendOtpConsumer = async () => {
                     const content = JSON.parse(msg.content.toString());
                     console.log(`📨 Received request to send to: ${content.to}`);
 
-                    // RESEND LOGIC
                     const { data, error } = await resend.emails.send({
-                        from: 'ZenChat Support <onboarding@resend.dev>', // Keep this exact email for Free Tier
+                        from: 'ZenChat Support <onboarding@resend.dev>', 
                         to: [content.to], 
                         subject: content.subject,
                         html: `<p>${content.body}</p>`, 
@@ -34,7 +40,6 @@ export const startSendOtpConsumer = async () => {
 
                     if (error) {
                         console.error("❌ Resend API Error:", error);
-                        // If 403/422 error, it usually means you are sending to an unverified email
                     } else {
                         console.log(`✅ Email sent successfully! ID: ${data?.id}`);
                     }
