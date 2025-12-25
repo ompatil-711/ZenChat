@@ -10,26 +10,30 @@ export const startSendOtpConsumer = async () => {
 
         const connection = await amqp.connect(url);
         const channel = await connection.createChannel();
-        // Ensure this string matches your User Service exactly
-        const queueName = "send-otp"; 
+        const queueName = "send-otp";
 
         await channel.assertQueue(queueName, { durable: true });
         console.log("✅ Mail service consumer started, listening for otp emails");
 
-        // --- FIX: Force Port 587 for Cloud Deployment ---
+        // --- FINAL FIX: Port 465 (SSL) + Timeouts ---
         const transporter = nodemailer.createTransport({
             host: "smtp.gmail.com",
-            port: 587,            // Standard TLS port
-            secure: false,        // Must be false for port 587
+            port: 465,            // Use SSL Port (Best for Render/Cloud)
+            secure: true,         // Must be TRUE for port 465
             auth: {
                 user: process.env.GMAIL_USER,
                 pass: process.env.GMAIL_PASS,
             },
             tls: {
-                rejectUnauthorized: false // Helps avoid SSL errors on Render
+                rejectUnauthorized: false // Helps avoid SSL certificate errors
             },
-            logger: true, // Keep logs on to debug
-            debug: true   // Keep debug on to see SMTP traffic
+            // timeouts to prevent hanging
+            connectionTimeout: 10000, // 10 seconds
+            greetingTimeout: 10000,
+            socketTimeout: 10000,
+            
+            logger: true, // Keep logs on
+            debug: true   // Keep debug on
         });
 
         channel.consume(queueName, async (msg: any) => {
@@ -53,8 +57,9 @@ export const startSendOtpConsumer = async () => {
                     if (emailError.response) {
                         console.error("SMTP Response:", emailError.response);
                     }
-                    // Ack the message so we don't get stuck in a loop, 
-                    // but log the error clearly.
+                    if (emailError.code === 'ETIMEDOUT') {
+                         console.error("⚠️ Connection Timed Out. Firewalls might be blocking port 465.");
+                    }
                     channel.ack(msg); 
                 }
             }
