@@ -6,58 +6,49 @@ dotenv.config();
 export const startSendOtpConsumer = async () => {
     try {
         const url = process.env.Rabbitmq_Host || "";
-        console.log(`🔌 Connecting to RabbitMQ at: ${url.split('@')[1] || 'localhost'}`);
+        console.log(`🔌 Connecting to RabbitMQ...`);
 
         const connection = await amqp.connect(url);
         const channel = await connection.createChannel();
-        const queueName = "send-otp";
+        const queueName = "send-otp"; // Ensure this matches exactly
 
         await channel.assertQueue(queueName, { durable: true });
         console.log("✅ Mail service consumer started, listening for otp emails");
 
-        // --- FIX START ---
+        // --- UPDATED TRANSPORTER WITH DEBUGGING ---
         const transporter = nodemailer.createTransport({
-            pool: true,
-            maxConnections: 1,
-            rateLimit: 1,
-            host: "smtp.gmail.com",
-            port: 587,        // CHANGED: 465 -> 587 (Standard for Cloud)
-            secure: false,    // CHANGED: true -> false (Must be false for 587)
+            service: "gmail", // Use the built-in 'gmail' service shortcut
             auth: {
-                user: process.env.GMAIL_USER,
-                pass: process.env.GMAIL_PASS,
+                user: process.env.GMAIL_USER, // Ensure this matches Dashboard Variable
+                pass: process.env.GMAIL_PASS, // Ensure this matches Dashboard Variable
             },
-            tls: {
-                rejectUnauthorized: false
-            },
-            // family: 4 // Optional: Keep if you suspect IPv6 issues, but usually not needed with 587
+            logger: true, // Log to console
+            debug: true   // Include SMTP traffic in logs
         });
-        // --- FIX END ---
 
         channel.consume(queueName, async (msg: any) => {
             if (msg) {
                 try {
-                    const { to, subject, body } = JSON.parse(msg.content.toString());
-                    console.log(`📨 Attempting to send email to: [${to}]`);
+                    const content = JSON.parse(msg.content.toString());
+                    console.log(`📨 Received request to send to: ${content.to}`);
 
-                    if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
-                        console.error("❌ ERROR: GMAIL_USER or GMAIL_PASS env vars are missing!");
-                        channel.ack(msg);
-                        return;
-                    }
-
-                    await transporter.sendMail({
+                    const info = await transporter.sendMail({
                         from: `"ZenChat Support" <${process.env.GMAIL_USER}>`,
-                        to,
-                        subject,
-                        text: body,
+                        to: content.to,
+                        subject: content.subject,
+                        text: content.body,
                     });
                     
-                    console.log(`✅ OTP mail sent successfully to ${to}`);
+                    console.log(`✅ Email sent: ${info.messageId}`);
                     channel.ack(msg);
 
-                } catch (emailError) {
-                    console.error("❌ Failed to send otp:", emailError);
+                } catch (emailError: any) {
+                    // PRINT THE EXACT ERROR
+                    console.error("❌ FATAL EMAIL ERROR:", emailError.message);
+                    if (emailError.response) console.error("SMTP Response:", emailError.response);
+                    
+                    // We ack the message so it doesn't crash the loop, 
+                    // but you might want to 'nack' it in production to retry.
                     channel.ack(msg); 
                 }
             }
