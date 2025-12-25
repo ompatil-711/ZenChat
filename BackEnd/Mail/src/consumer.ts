@@ -14,7 +14,7 @@ export const startSendOtpConsumer = async () => {
             return; // Stop here to prevent crash
         }
         
-        // --- FIX: Initialize Resend INSIDE the function ---
+        // --- Initialize Resend ---
         const resend = new Resend(process.env.RESEND_API_KEY);
 
         const url = process.env.Rabbitmq_Host || "";
@@ -32,7 +32,8 @@ export const startSendOtpConsumer = async () => {
                     console.log(`📨 Received request to send to: ${content.to}`);
 
                     const { data, error } = await resend.emails.send({
-                        from: 'ZenChat Support <onboarding@resend.dev>', 
+                        // 👇 UPDATED: Uses your new verified domain
+                        from: 'ZenChat Support <noreply@zenchat.online>', 
                         to: [content.to], 
                         subject: content.subject,
                         html: `<p>${content.body}</p>`, 
