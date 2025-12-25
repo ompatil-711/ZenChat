@@ -10,20 +10,26 @@ export const startSendOtpConsumer = async () => {
 
         const connection = await amqp.connect(url);
         const channel = await connection.createChannel();
-        const queueName = "send-otp"; // Ensure this matches exactly
+        // Ensure this string matches your User Service exactly
+        const queueName = "send-otp"; 
 
         await channel.assertQueue(queueName, { durable: true });
         console.log("✅ Mail service consumer started, listening for otp emails");
 
-        // --- UPDATED TRANSPORTER WITH DEBUGGING ---
+        // --- FIX: Force Port 587 for Cloud Deployment ---
         const transporter = nodemailer.createTransport({
-            service: "gmail", // Use the built-in 'gmail' service shortcut
+            host: "smtp.gmail.com",
+            port: 587,            // Standard TLS port
+            secure: false,        // Must be false for port 587
             auth: {
-                user: process.env.GMAIL_USER, // Ensure this matches Dashboard Variable
-                pass: process.env.GMAIL_PASS, // Ensure this matches Dashboard Variable
+                user: process.env.GMAIL_USER,
+                pass: process.env.GMAIL_PASS,
             },
-            logger: true, // Log to console
-            debug: true   // Include SMTP traffic in logs
+            tls: {
+                rejectUnauthorized: false // Helps avoid SSL errors on Render
+            },
+            logger: true, // Keep logs on to debug
+            debug: true   // Keep debug on to see SMTP traffic
         });
 
         channel.consume(queueName, async (msg: any) => {
@@ -39,16 +45,16 @@ export const startSendOtpConsumer = async () => {
                         text: content.body,
                     });
                     
-                    console.log(`✅ Email sent: ${info.messageId}`);
+                    console.log(`✅ Email sent successfully: ${info.messageId}`);
                     channel.ack(msg);
 
                 } catch (emailError: any) {
-                    // PRINT THE EXACT ERROR
                     console.error("❌ FATAL EMAIL ERROR:", emailError.message);
-                    if (emailError.response) console.error("SMTP Response:", emailError.response);
-                    
-                    // We ack the message so it doesn't crash the loop, 
-                    // but you might want to 'nack' it in production to retry.
+                    if (emailError.response) {
+                        console.error("SMTP Response:", emailError.response);
+                    }
+                    // Ack the message so we don't get stuck in a loop, 
+                    // but log the error clearly.
                     channel.ack(msg); 
                 }
             }
