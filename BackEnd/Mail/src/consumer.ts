@@ -1,33 +1,29 @@
 import amqp from 'amqplib';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend'; 
 import dotenv from 'dotenv';
 dotenv.config();
 
 export const startSendOtpConsumer = async () => {
     try {
-        const url = process.env.Rabbitmq_Host || "";
-        console.log(`🔌 Connecting to RabbitMQ...`);
+        console.log("🔌 Connecting to RabbitMQ...");
 
+        // --- DEBUGGING: Check if Key Exists ---
+        if (!process.env.RESEND_API_KEY) {
+            console.error("❌ CRITICAL ERROR: RESEND_API_KEY is undefined!");
+            console.error("👉 Please check your Render Dashboard > Environment Variables.");
+            return; // Stop here to prevent crash
+        }
+        
+        // --- FIX: Initialize Resend INSIDE the function ---
+        const resend = new Resend(process.env.RESEND_API_KEY);
+
+        const url = process.env.Rabbitmq_Host || "";
         const connection = await amqp.connect(url);
         const channel = await connection.createChannel();
         const queueName = "send-otp";
 
         await channel.assertQueue(queueName, { durable: true });
-        console.log("✅ Mail service consumer started (Using Brevo SMTP)");
-
-        // 1. Configure the Transporter for Brevo
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-            port: Number(process.env.SMTP_PORT) || 587,
-            secure: false, // Must be false for port 587
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS,
-            },
-            tls: {
-                rejectUnauthorized: false
-            }
-        });
+        console.log("✅ Mail service consumer started (Using Resend API)");
 
         channel.consume(queueName, async (msg: any) => {
             if (msg) {
@@ -35,20 +31,24 @@ export const startSendOtpConsumer = async () => {
                     const content = JSON.parse(msg.content.toString());
                     console.log(`📨 Received request to send to: ${content.to}`);
 
-                    // 2. Send the email
-                    const info = await transporter.sendMail({
-                        from: `"ZenChat Support" <${process.env.SMTP_USER}>`, // THIS MUST MATCH YOUR BREVO LOGIN EMAIL
-                        to: content.to,
+                    const { data, error } = await resend.emails.send({
+                        from: 'ZenChat Support <onboarding@resend.dev>', 
+                        to: [content.to], 
                         subject: content.subject,
-                        html: `<p>${content.body}</p>`,
+                        html: `<p>${content.body}</p>`, 
                     });
+
+                    if (error) {
+                        console.error("❌ Resend API Error:", error);
+                    } else {
+                        console.log(`✅ Email sent successfully! ID: ${data?.id}`);
+                    }
                     
-                    console.log(`✅ OTP sent via Brevo! ID: ${info.messageId}`);
                     channel.ack(msg);
 
-                } catch (emailError: any) {
-                    console.error("❌ Email Error:", emailError.message);
-                    channel.ack(msg); 
+                } catch (err) {
+                    console.error("❌ Fatal Error processing message:", err);
+                    channel.ack(msg);
                 }
             }
         });
