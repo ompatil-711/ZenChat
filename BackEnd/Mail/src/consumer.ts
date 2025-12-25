@@ -5,29 +5,31 @@ dotenv.config();
 
 export const startSendOtpConsumer = async () => {
     try {
-        const connection = await amqp.connect(process.env.Rabbitmq_Host || "");
+        const url = process.env.Rabbitmq_Host || "";
+        console.log(`🔌 Connecting to RabbitMQ at: ${url.split('@')[1] || 'localhost'}`); // Logs host only for security
+
+        const connection = await amqp.connect(url);
         const channel = await connection.createChannel();
         const queueName = "send-otp";
 
         await channel.assertQueue(queueName, { durable: true });
         console.log("✅ Mail service consumer started, listening for otp emails");
 
-        // CONFIGURATION: Gentle connection pool to avoid Google Blocks
         const transporter = nodemailer.createTransport({
-            pool: true,              // Reuses the connection
-            maxConnections: 1,       // Only 1 connection at a time
-            rateLimit: 1,            // Only 1 email per second (Throttling)
+            pool: true,
+            maxConnections: 1,
+            rateLimit: 1,
             host: "smtp.gmail.com",
-            port: 465,               // SSL Port (Best for Render)
-            secure: true,            // True for 465
+            port: 465,
+            secure: true,
             auth: {
-                user: process.env.USER,
-                pass: process.env.Password, // Your App Password
+                user: process.env.GMAIL_USER, // UPDATED: Avoids system var conflict
+                pass: process.env.GMAIL_PASS, // UPDATED
             },
             tls: {
                 rejectUnauthorized: false
             },
-            family: 4 // Force IPv4 to prevent IPv6 Timeouts
+            family: 4
         } as any);
 
         channel.consume(queueName, async (msg: any) => {
@@ -36,35 +38,30 @@ export const startSendOtpConsumer = async () => {
                     const { to, subject, body } = JSON.parse(msg.content.toString());
                     console.log(`📨 Attempting to send email to: [${to}]`);
 
-                    if (!process.env.USER || !process.env.Password) {
-                        console.error("❌ ERROR: USER or Password env vars are missing!");
-                        channel.ack(msg); // Remove bad message
+                    if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+                        console.error("❌ ERROR: GMAIL_USER or GMAIL_PASS env vars are missing!");
+                        channel.ack(msg);
                         return;
                     }
 
                     await transporter.sendMail({
-                        from: `"ZenChat Support" <${process.env.USER}>`,
+                        from: `"ZenChat Support" <${process.env.GMAIL_USER}>`,
                         to,
                         subject,
                         text: body,
                     });
                     
                     console.log(`✅ OTP mail sent successfully to ${to}`);
-                    
-                    // SUCCESS: Remove message from queue
                     channel.ack(msg);
 
                 } catch (emailError) {
-                    console.error("❌ Failed to send otp (Removing from queue to stop loop):", emailError);
-                    
-                    // *** CRITICAL FIX *** // We acknowledge the message even if it FAILS.
-                    // This deletes it from RabbitMQ so it doesn't retry instantly.
+                    console.error("❌ Failed to send otp:", emailError);
                     channel.ack(msg); 
                 }
             }
         });
 
     } catch (error) {
-        console.log("Failed to start rabbitmq consumer", error);
+        console.error("❌ Failed to start rabbitmq consumer:", error);
     }
 };
