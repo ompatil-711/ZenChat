@@ -28,6 +28,9 @@ app.use(cors({
 
 // 3. JSON Middleware
 app.use(express.json());
+app.get("/", (req, res) => {
+    res.status(200).send("✅ Service is Live");
+});
 
 // 4. Routes
 app.use("/api/v1/user", userRoutes);
