@@ -18,6 +18,13 @@ app.use(cors({
 // 2. Middleware
 app.use(express.json());
 
+// --- 👇 ADDED HEALTH CHECK ROUTE 👇 ---
+// This tells Cron-Job.org that the server is awake and healthy
+app.get("/", (req, res) => {
+    res.status(200).send("✅ User Service is Live");
+});
+// --------------------------------------
+
 // 3. Routes
 // This creates the endpoint: https://zenchat-server.onrender.com/api/v1/chat
 app.use("/api/v1/chat", chatRoutes);
