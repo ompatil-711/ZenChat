@@ -21,6 +21,7 @@ While it offers a seamless UI for users to chat and share images, the backend is
 * **Rate-Limit Protection:** Implemented `prefetch(1)` throttling to process email queues sequentially, preventing 3rd-party API crashes.
 * **Rich Media Optimization:** Integrated **Cloudinary** and **Multer** for optimized, secure image storage and delivery.
 
+
 ---
 
 ## ✨ Features
