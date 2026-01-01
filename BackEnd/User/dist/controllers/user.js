@@ -23,7 +23,7 @@ export const loginUser = TryCatch(async (req, res) => {
     });
     const message = {
         to: email,
-        subject: "Your otp code - ZenChat{~by Om Patil}",
+        subject: "Your otp code - ZenChat",
         body: `Your OTP is ${otp}. It is valid for 5 minutes`,
     };
     await publishtoQueue("send-otp", message);
