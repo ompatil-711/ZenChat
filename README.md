@@ -9,6 +9,7 @@
 
 ---
 
+
 ## 🚀 About The Project
 
 **ZenChat** is an advanced engineering project designed to demonstrate **Event-Driven Architecture** and **Scalability**.
@@ -20,6 +21,7 @@ While it offers a seamless UI for users to chat and share images, the backend is
 * **Self-Healing Workers:** Custom recursive reconnection logic ensures 99.9% uptime for RabbitMQ consumers, even on unstable networks.
 * **Rate-Limit Protection:** Implemented `prefetch(1)` throttling to process email queues sequentially, preventing 3rd-party API crashes.
 * **Rich Media Optimization:** Integrated **Cloudinary** and **Multer** for optimized, secure image storage and delivery.
+
 
 ---
 
