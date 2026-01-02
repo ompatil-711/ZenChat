@@ -9,7 +9,6 @@
 
 ---
 
-
 ## 🚀 About The Project
 
 **ZenChat** is an advanced engineering project designed to demonstrate **Event-Driven Architecture** and **Scalability**.
