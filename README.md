@@ -56,6 +56,7 @@ While it offers a seamless UI for users to chat and share images, the backend is
 
 ## 🏗️ System Architecture
 
+
 ZenChat separates real-time logic from heavy blocking tasks.
 
 ```mermaid
