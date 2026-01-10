@@ -26,6 +26,7 @@ While it offers a seamless UI for users to chat and share images, the backend is
 
 ## ✨ Features
 
+
 ### ⚡ Real-Time & Interactive
 * **Instant Messaging:** Low-latency delivery using **Socket.io**.
 * **Smart Indicators:** Real-time "Typing..." status and Online/Offline presence.
