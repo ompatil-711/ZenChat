@@ -6,7 +6,7 @@ import cors from 'cors';
 import { app, server } from './config/socket.js';
 dotenv.config();
 // 1. CORS Configuration
-// We allow "*" so your Frontend (Localhost or Render) can connect easily
+// Allows Cron Job & Frontend to connect
 app.use(cors({
     origin: "*",
     credentials: true,
@@ -14,12 +14,17 @@ app.use(cors({
 }));
 // 2. Middleware
 app.use(express.json());
+// --- 👇 CRON JOB HEALTH CHECK 👇 ---
+// Keep this response extremely short ("OK") to prevent timeouts or size errors
+app.get("/", (req, res) => {
+    res.status(200).send("OK");
+});
+// ----------------------------------
 // 3. Routes
-// This creates the endpoint: https://zenchat-server.onrender.com/api/v1/chat
+// Endpoint: https://zenchat-server.onrender.com/api/v1/chat
 app.use("/api/v1/chat", chatRoutes);
 const port = process.env.PORT || 5001;
 // 4. Robust Server Startup
-// Using a function ensures DB connects BEFORE the server starts
 const startServer = async () => {
     try {
         await connectDb();
