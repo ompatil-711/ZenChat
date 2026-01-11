@@ -11,8 +11,8 @@ const USER_URL = process.env.NEXT_PUBLIC_USER_BACKEND_URL || process.env.NEXT_PU
 const CHAT_URL = process.env.NEXT_PUBLIC_CHAT_BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
 
 // UPDATED: Connected to Render Cloud Backend
-export const user_service = USER_URL || "https://zenchat-user.onrender.com";
-export const chat_service = CHAT_URL || "https://zenchat-server.onrender.com";
+export const user_service = USER_URL || "https://zenchat-user-o1oe.onrender.com";
+export const chat_service = CHAT_URL || "https://zenchat-chat.onrender.com";
 
 export interface User{
     _id: string;
