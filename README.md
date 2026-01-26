@@ -3,6 +3,7 @@
 ![ZenChat Status](https://img.shields.io/badge/Status-Live-success?style=for-the-badge)
 ![ZenChat Tech](https://img.shields.io/badge/Stack-MERN_Microservices-blue?style=for-the-badge)
 
+
 > **A robust, real-time messaging platform built with a Microservices architecture, combining instant communication with rich media sharing and fault-tolerant background processing.**
 
 🌐 **Live Demo:** [https://zenchat.online](https://zenchat.online)
@@ -20,7 +21,6 @@ While it offers a seamless UI for users to chat and share images, the backend is
 * **Self-Healing Workers:** Custom recursive reconnection logic ensures 99.9% uptime for RabbitMQ consumers, even on unstable networks.
 * **Rate-Limit Protection:** Implemented `prefetch(1)` throttling to process email queues sequentially, preventing 3rd-party API crashes.
 * **Rich Media Optimization:** Integrated **Cloudinary** and **Multer** for optimized, secure image storage and delivery.
-
 
 ---
 
