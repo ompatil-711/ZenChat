@@ -10,26 +10,26 @@ dotenv.config();
 // 1. CORS Configuration
 // Allows Cron Job & Frontend to connect
 app.use(cors({
-  origin: "*", 
-  credentials: true, 
-  methods: ["GET", "POST", "PUT", "DELETE"]
+    origin: "*",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"]
 }));
 
 // 2. Middleware
 app.use(express.json());
 
-// --- 👇 CRON JOB HEALTH CHECK 👇 ---
-// Keep this response extremely short ("OK") to prevent timeouts or size errors
+// --- 👇 CRON JOB HEALTH CHECK (THE FIX) 👇 ---
+// This simple route tells cron-job.org "I am awake" with a 200 OK status.
 app.get("/", (req, res) => {
     res.status(200).send("OK");
 });
-// ----------------------------------
+// ---------------------------------------------
 
 // 3. Routes
-// Endpoint: https://zenchat-server.onrender.com/api/v1/chat
+// Endpoint: https://zenchat-chat.onrender.com/api/v1/chat
 app.use("/api/v1/chat", chatRoutes);
 
-const port = process.env.PORT || 5001; 
+const port = process.env.PORT || 5001;
 
 // 4. Robust Server Startup
 const startServer = async () => {
@@ -37,6 +37,7 @@ const startServer = async () => {
         await connectDb();
         console.log("✅ Connected to MongoDB (Chat Service)");
 
+        // Note: We use 'server.listen' (not app.listen) because we imported 'server' from socket.js
         server.listen(port, () => {
             console.log(`✅ Chat Server is running on port ${port}`);
         });
