@@ -1,52 +1,62 @@
 import express from "express";
 import dotenv from 'dotenv';
 import connectDb from "./config/db.js";
-import { createClient } from 'redis';
+// 👇 THE FIX: Added 'type' keyword before RedisClientType
+import { createClient, type RedisClientType } from 'redis'; 
 import userRoutes from "./routes/user.js";
-import { connectRabbitMQ } from "./config/rabbitmq.js"; // This imports the logic
+import { connectRabbitMQ } from "./config/rabbitmq.js";
 import cors from 'cors';
 
 dotenv.config();
 
-// 1. Redis Client 
-// (Make sure you add a REDIS_URL environment variable in Render if you use Redis)
-export const redisClient = createClient({
-    url: process.env.REDIS_URL as string || 'redis://localhost:6379',
-});
-
-redisClient.on('error', (err) => console.log('Redis Client Error', err));
-
 const app = express();
 
-// 2. REQUIRED UPDATE: Fix CORS to allow Render Frontend
-// Changed origin to "*" to allow your deployed frontend to access this backend
+// 1. CORS Configuration
 app.use(cors({
   origin: "*", 
   credentials: true, 
   methods: ["GET", "POST", "PUT", "DELETE"]
 }));
 
-// 3. JSON Middleware
 app.use(express.json());
-app.get("/", (req, res) => {
-    res.status(200).send("✅ Service is Live");
-});
 
-// 4. Routes
+// --- 👇 CRON JOB HEALTH CHECK 👇 ---
+app.get("/", (req, res) => {
+    res.status(200).send("OK");
+});
+// ----------------------------------
+
+// 2. Redis Client Setup
+const redisUrl = process.env.REDIS_URL;
+
+// Explicitly type the variable
+let redisClient: RedisClientType | undefined; 
+
+if (redisUrl) {
+    redisClient = createClient({ url: redisUrl });
+    redisClient.on('error', (err) => console.log('Redis Client Error', err));
+} else {
+    console.warn("⚠️ WARNING: REDIS_URL is missing! Redis features will fail.");
+}
+
+export { redisClient };
+
+// 3. Routes
 app.use("/api/v1/user", userRoutes);
 
 const port = process.env.PORT || 5000;
 
-// 5. Server Startup
+// 4. Server Startup
 const startServer = async () => {
     try {
         await connectDb();
         console.log("✅ Connected to MongoDB");
 
-        await redisClient.connect();
-        console.log("✅ Connected to Redis");
+        if (redisClient) {
+            await redisClient.connect();
+            console.log("✅ Connected to Redis");
+        }
 
-        // This calls the function in your config file
         await connectRabbitMQ();
         console.log("✅ Connected to RabbitMQ");
 
