@@ -3,7 +3,6 @@
 ![ZenChat Status](https://img.shields.io/badge/Status-Live-success?style=for-the-badge)
 ![ZenChat Tech](https://img.shields.io/badge/Stack-MERN_Microservices-blue?style=for-the-badge)
 
-
 > **A robust, real-time messaging platform built with a Microservices architecture, combining instant communication with rich media sharing and fault-tolerant background processing.**
 
 🌐 **Live Demo:** [https://zenchat.online](https://zenchat.online)
