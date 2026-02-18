@@ -41,6 +41,7 @@ While it offers a seamless UI for users to chat and share images, the backend is
 
 ---
 
+
 ## 🛠️ Tech Stack
 
 | Domain | Technologies |
