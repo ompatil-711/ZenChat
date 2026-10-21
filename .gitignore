@@ -1,0 +1,11 @@
+# Local guidance for coding agents
+/AGENTS.md
+
+# Local credentials and generated output (existing tracked files need separate cleanup)
+**/.env*
+!**/.env.example
+**/node_modules/
+**/dist/
+**/.next/
+**/*.tsbuildinfo
+*.log
