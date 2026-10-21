@@ -3,7 +3,7 @@ import { useAppData, user_service } from "@/context/AppContext";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import Cookies from "js-cookie";
-import axios from "axios";
+import axios, { errorMessage } from "@/lib/api";
 import toast from "react-hot-toast";
 import Loading from "@/components/Loading";
 import { ArrowLeft, Save, User, UserCircle } from "lucide-react";
@@ -21,7 +21,7 @@ const ProfilePage = () => {
     setName(user?.name);
   };
 
-  const submitHandler = async (e: any) => {
+  const submitHandler = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const token = Cookies.get("token");
     try {
@@ -37,15 +37,15 @@ const ProfilePage = () => {
 
       Cookies.set("token", data.token, {
         expires: 15,
-        secure: false,
+        secure: window.location.protocol === "https:",
         path: "/",
       });
 
       toast.success(data.message);
       setUser(data.user);
       setIsEdit(false);
-    } catch (error: any) {
-      toast.error(error.response.data.message);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error));
     }
   };
 

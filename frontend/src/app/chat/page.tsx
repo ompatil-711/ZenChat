@@ -1,345 +1,137 @@
 "use client";
-
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import Cookies from "js-cookie";
+import toast from "react-hot-toast";
 import Loading from "@/components/Loading";
 import ChatSidebar from "@/components/ChatSidebar";
 import ChatHeader from "@/components/ChatHeader";
-import { chat_service, useAppData, User } from "@/context/AppContext";
-import { SocketData } from "@/context/SocketContext";
-import { useRouter } from "next/navigation";
-import React, { useEffect, useState, useRef } from "react";
-import toast from "react-hot-toast";
-import Cookies from "js-cookie";
-import axios from "axios";
 import ChatMessages from "@/components/ChatMessages";
 import MessageInput from "@/components/MessageInput";
-
-export interface Message {
-  _id: string;
-  chatId: string;
-  sender: string;
-  text?: string;
-  image?: {
-    url: string;
-    public: string;
-  };
-  messageType: "text" | "image";
-  seen: boolean;
-  seenAt?: string;
-  createdAt: string;
+import { useAppData } from "@/context/AppContext";
+import { SocketData } from "@/context/SocketContext";
+import api, { chat_service, errorMessage } from "@/lib/api";
+import type { Message, MessagePage, SeenEvent, User } from "@/types/chat";
+export type { Message } from "@/types/chat";
+interface History extends MessagePage { chatId: string }
+function mergeMessages(old: Message[], incoming: Message[]) {
+  const all = new Map(old.map(message => [message._id, message]));
+  incoming.forEach(message => all.set(message._id, message));
+  return [...all.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a._id.localeCompare(b._id));
 }
-
-const ZenChat = () => {
-  const {
-    loading,
-    isAuth,
-    logoutUser,
-    chats,
-    user: loggedInUser,
-    users,
-    fetchChats,
-    setChats,
-  } = useAppData();
-
+export default function ZenChat() {
+  const { loading, isAuth, logoutUser, chats, users, user: loggedInUser, fetchChats } = useAppData();
   const { socket } = SocketData();
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
+  const router = useRouter();
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [siderbarOpen, setSiderbarOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[] | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [showAllUser, setShowAllUser] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showAllUsers, setShowAllUsers] = useState(false);
+  const [history, setHistory] = useState<History | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const current = history?.chatId === selectedUser ? history : null;
+  const headers = () => ({ Authorization: "Bearer " + Cookies.get("token") });
 
-  const router = useRouter();
-
-  // 1. Auth Check
+  useEffect(() => { if (!loading && !isAuth) router.replace("/login"); }, [isAuth, loading, router]);
+  const fetchCurrent = useCallback(async (chatId: string, signal?: AbortSignal) => {
+    const { data } = await api.get<MessagePage>(chat_service + "/api/v1/chat/message/" + chatId, { headers: headers(), signal });
+    if (signal?.aborted) return;
+    setHistory(prev => ({ ...data, chatId,
+      nextCursor: prev?.chatId === chatId ? prev.nextCursor : data.nextCursor,
+      messages: prev?.chatId === chatId ? mergeMessages(prev.messages, data.messages) : data.messages }));
+    setHistoryError("");
+    await fetchChats();
+  }, [fetchChats]);
   useEffect(() => {
-    if (!isAuth && !loading) {
-      router.push("/login");
-    }
-  }, [isAuth, router, loading]);
-
-  const handleLogout = () => {
-    logoutUser();
-  };
-
-  // 2. Fetch Messages
-  async function fetchChat() {
-    const token = Cookies.get("token");
-    try {
-      const { data } = await axios.get(
-        `${chat_service}/api/v1/chat/message/${selectedUser}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      setMessages(data.messages);
-      setUser(data.user);
-    } catch (error) {
-      console.log(error);
-      toast.error("Failed to load messages");
-    }
-  }
-
-  // 3. Helper: Reset Unseen Count (RESTORED from ChatApp)
-  const resetUnseenCount = (chatId: string) => {
-    setChats((prev) => {
-      if (!prev) return null;
-      return prev.map((chat) => {
-        if (chat.chat._id === chatId) {
-          return {
-            ...chat,
-            chat: {
-              ...chat.chat,
-              unseenCount: 0,
-            },
-          };
-        }
-        return chat;
-      });
-    });
-  };
-
-  // 4. Helper: Move Chat To Top (RESTORED)
-  const moveChatToTop = (
-    chatId: string,
-    newMessage: any,
-    updatedUnseenCount = true
-  ) => {
-    setChats((prev: any) => {
-      if (!prev) return null;
-
-      const updatedChats = [...prev];
-      const chatIndex = updatedChats.findIndex(
-        (chat: any) => chat.chat._id === chatId
-      );
-
-      if (chatIndex !== -1) {
-        const [moveChat] = updatedChats.splice(chatIndex, 1);
-
-        const updatedChat = {
-          ...moveChat,
-          chat: {
-            ...moveChat.chat,
-            latestMessage: {
-              text: newMessage.text,
-              sender: newMessage.sender,
-            },
-            updatedAt: new Date().toString(),
-            unseenCount:
-              updatedUnseenCount && newMessage.sender !== loggedInUser?._id
-                ? (moveChat.chat.unseenCount || 0) + 1
-                : moveChat.chat.unseenCount || 0,
-          },
-        };
-
-        updatedChats.unshift(updatedChat);
-      }
-      return updatedChats;
-    });
-  };
-
-  // 5. Create New Chat
-  async function createChat(u: User) {
-    try {
-      const token = Cookies.get("token");
-      const { data } = await axios.post(
-        `${chat_service}/api/v1/chat/new`,
-        {
-          userId: loggedInUser?._id,
-          otherUserId: u._id,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      setSelectedUser(data.chatId);
-      setShowAllUser(false);
-      await fetchChats();
-    } catch (error) {
-      console.log(error);
-      toast.error("Failed to start chat");
-    }
-  }
-
-  // 6. Socket Emission: Handle Typing
-  const handleTyping = (value: string) => {
-    setMessage(value);
-
-    if (!selectedUser || !socket) return;
-
-    socket.emit("typing", {
-      chatId: selectedUser,
-      userId: loggedInUser?._id,
-    });
-
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-
-    typingTimeoutRef.current = setTimeout(() => {
-      socket.emit("stopTyping", {
-        chatId: selectedUser,
-        userId: loggedInUser?._id,
-      });
-    }, 2000);
-  };
-
-  // 7. API + Socket Emission: Send Message
-  const handleMessageSend = async (e: any, imageFile?: File | null) => {
     if (!selectedUser) return;
-
-    try {
-      if (socket) {
-        socket.emit("stopTyping", {
-          chatId: selectedUser,
-          userId: loggedInUser?._id,
-        });
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      }
-
-      const token = Cookies.get("token");
-      const formData = new FormData();
-
-      formData.append("chatId", selectedUser);
-      if (message.trim()) formData.append("text", message);
-      if (imageFile) formData.append("image", imageFile);
-
-      const res = await axios.post(
-        `${chat_service}/api/v1/chat/message`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-
-      // Update UI instantly
-      moveChatToTop(selectedUser, res.data.message, false);
-
-      setMessage("");
-      await fetchChat();
-    } catch (error) {
-      console.log(error);
-      toast.error("Failed to send message");
-    }
-  };
-
-  // 8. Socket LISTENERS (MISSING PART RESTORED)
-  useEffect(() => {
-    // Listener: New Message
-    socket?.on("newMessage", (message: any) => {
-      console.log("Received new message:", message);
-
-      if (selectedUser === message.chatId) {
-        // If we are looking at this chat, append message
-        setMessages((prev) => {
-          const currentMessages = prev || [];
-          const messageExists = currentMessages.some(
-            (msg) => msg._id === message._id
-          );
-          if (!messageExists) {
-            return [...currentMessages, message];
-          }
-          return currentMessages;
-        });
-        // Update sidebar without increasing unseen count
-        moveChatToTop(message.chatId, message, false);
-      } else {
-        // If we are NOT looking at this chat, update sidebar AND increase unseen count
-        moveChatToTop(message.chatId, message, true);
-      }
+    const controller = new AbortController();
+    socket?.emit("joinChat", selectedUser);
+    void fetchCurrent(selectedUser, controller.signal).catch(error => {
+      if (!controller.signal.aborted) setHistoryError(errorMessage(error));
     });
-
-    // Listener: Messages Seen
-    socket?.on("messagesSeen", (data: any) => {
-      console.log("Message seen by:", data);
-      if (selectedUser === data.chatId) {
-        setMessages((prev) => {
-          if (!prev) return null;
-          return prev.map((msg) => {
-            if (
-              msg.sender === loggedInUser?._id &&
-              data.messageIds &&
-              data.messageIds.includes(msg._id)
-            ) {
-              return {
-                ...msg,
-                seen: true,
-                seenAt: new Date().toString(),
-              };
-            }
-            return msg;
-          });
-        });
-      }
-    });
-
-    // Note: 'userTyping' listeners are NOT needed here because 
-    // ChatHeader handles them via SocketContext now.
-
     return () => {
-      socket?.off("newMessage");
-      socket?.off("messagesSeen");
+      controller.abort();
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      socket?.emit("stopTyping", { chatId: selectedUser });
+      socket?.emit("leaveChat", selectedUser);
     };
-  }, [socket, selectedUser, loggedInUser?._id, setChats]); // Dependencies
-
-  // 9. Join Room & Cleanup
+  }, [selectedUser, socket, fetchCurrent]);
   useEffect(() => {
-    if (selectedUser) {
-      fetchChat();
-      resetUnseenCount(selectedUser); // Reset counts when entering chat
-      
-      socket?.emit("joinChat", selectedUser);
-
-      return () => {
-        socket?.emit("leaveChat", selectedUser);
-        setMessages(null);
-      };
-    }
-  }, [selectedUser, socket]);
-
+    if (!socket) return;
+    const onMessage = (incoming: Message) => {
+      if (incoming.chatId === selectedUser) {
+        setHistory(prev => prev?.chatId === selectedUser ? { ...prev, messages: mergeMessages(prev.messages, [incoming]) } : prev);
+        if (incoming.sender !== loggedInUser?._id) void fetchCurrent(incoming.chatId).catch(error => toast.error(errorMessage(error)));
+      }
+      void fetchChats().catch(error => toast.error(errorMessage(error)));
+    };
+    const onSeen = (event: SeenEvent) => setHistory(prev => prev?.chatId === event.chatId ? {
+      ...prev, messages: prev.messages.map(message => event.messageIds.includes(message._id)
+        ? { ...message, seen: true, seenAt: new Date().toISOString() } : message),
+    } : prev);
+    const onChat = () => { void fetchChats().catch(error => toast.error(errorMessage(error))); };
+    socket.on("newMessage", onMessage); socket.on("messagesSeen", onSeen); socket.on("chatCreated", onChat);
+    return () => { socket.off("newMessage", onMessage); socket.off("messagesSeen", onSeen); socket.off("chatCreated", onChat); };
+  }, [socket, selectedUser, loggedInUser?._id, fetchCurrent, fetchChats]);
+  async function createChat(user: User) {
+    try {
+      const { data } = await api.post<{ chatId: string }>(chat_service + "/api/v1/chat/new", { otherUserId: user._id }, { headers: headers() });
+      setSelectedUser(data.chatId); setShowAllUsers(false);
+      await fetchChats();
+    } catch (error) { toast.error(errorMessage(error)); }
+  }
+  function handleTyping(value: string) {
+    setMessage(value);
+    if (!selectedUser || !socket) return;
+    socket.emit("typing", { chatId: selectedUser });
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => socket.emit("stopTyping", { chatId: selectedUser }), 2000);
+  }
+  async function sendMessage(_event: FormEvent<HTMLFormElement>, image?: File | null): Promise<boolean> {
+    if (!selectedUser) return false;
+    const chatId = selectedUser;
+    try {
+      socket?.emit("stopTyping", { chatId });
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      const body = new FormData();
+      body.append("chatId", chatId);
+      if (message.trim()) body.append("text", message.trim());
+      if (image) body.append("image", image);
+      const { data } = await api.post<{ message: Message }>(chat_service + "/api/v1/chat/message", body, { headers: headers(), timeout: 30000 });
+      setHistory(prev => prev?.chatId === chatId ? { ...prev, messages: mergeMessages(prev.messages, [data.message]) } : prev);
+      setMessage("");
+      await fetchChats();
+      return true;
+    } catch (error) { toast.error(errorMessage(error)); return false; }
+  }
+  async function loadOlder() {
+    if (!current?.nextCursor || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const { data } = await api.get<MessagePage>(chat_service + "/api/v1/chat/message/" + current.chatId, {
+        params: { before: current.nextCursor }, headers: headers(),
+      });
+      setHistory(prev => prev?.chatId === current.chatId ? { ...prev, nextCursor: data.nextCursor, messages: mergeMessages(data.messages, prev.messages) } : prev);
+    } catch (error) { toast.error(errorMessage(error)); }
+    finally { setLoadingOlder(false); }
+  }
   if (loading) return <Loading />;
   if (!isAuth) return null;
-
-  return (
-    <div className="min-h-screen flex bg-gray-900 text-white relative overflow-hidden">
-      <ChatSidebar
-        sidebarOpen={siderbarOpen}
-        setSidebarOpen={setSiderbarOpen}
-        showAllUsers={showAllUser}
-        setShowAllUsers={setShowAllUser}
-        users={users}
-        loggedInUser={loggedInUser}
-        chats={chats}
-        selectedUser={selectedUser}
-        setSelectedUser={setSelectedUser}
-        handleLogout={handleLogout}
-        createChat={createChat}
-      />
-
-      <div className="flex-1 flex flex-col justify-between p-4 backdrop-blur-xl bg-white/5 border border-white/10">
-        <ChatHeader user={user} setSidebarOpen={setSiderbarOpen} />
-
-        <ChatMessages
-          selectedUser={selectedUser}
-          messages={messages}
-          loggedInUser={loggedInUser}
-        />
-
-        <MessageInput
-          selectedUser={selectedUser}
-          message={message}
-          setMessage={handleTyping}
-          handleMessageSend={handleMessageSend}
-        />
-      </div>
+  return <div className="min-h-screen flex bg-gray-900 text-white relative overflow-hidden">
+    <ChatSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} showAllUsers={showAllUsers} setShowAllUsers={setShowAllUsers}
+      users={users} loggedInUser={loggedInUser} chats={chats} selectedUser={selectedUser} setSelectedUser={setSelectedUser}
+      handleLogout={() => void logoutUser()} createChat={createChat} />
+    <div className="flex-1 min-w-0 flex flex-col justify-between p-4 bg-white/5 border border-white/10">
+      <ChatHeader user={current?.user || null} chatId={selectedUser} setSidebarOpen={setSidebarOpen} />
+      {historyError ? <p role="alert" className="text-red-300">{historyError}</p> : null}
+      {current?.nextCursor ? <button type="button" disabled={loadingOlder} onClick={() => void loadOlder()} className="text-blue-300 py-2">
+        {loadingOlder ? "Loading…" : "Load older messages"}
+      </button> : null}
+      <ChatMessages selectedUser={selectedUser} messages={current?.messages || null} loggedInUser={loggedInUser} />
+      <MessageInput selectedUser={selectedUser} message={message} setMessage={handleTyping} handleMessageSend={sendMessage} />
     </div>
-  );
-};
-
-export default ZenChat;
+  </div>;
+}

@@ -1,79 +1,53 @@
-import { Server, Socket } from "socket.io";
-import http from "http";
+import { Server } from "socket.io";
+import http from "node:http";
 import express from "express";
-
-const app = express();
-
-const server = http.createServer(app);
-
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
+import { AppDataSource, ConversationMember, authenticateToken, isUuid } from "@zenchat/database";
+export const app = express();
+export const server = http.createServer(app);
+export const io = new Server(server, {
+  cors: { origin: (process.env.FRONTEND_URL || "http://localhost:3000").split(",") },
 });
-
-const userSocketMap: Record<string, string> = {};
-
-export const getRecieverSocketId = (recieverId: string): string | undefined => {
-  return userSocketMap[recieverId];
-};
-
-io.on("connection", (socket: Socket) => {
-  console.log("User Connected", socket.id);
-
-  const userId = socket.handshake.query.userId as string | undefined;
-
-  if (userId && userId !== "undefined") {
-    userSocketMap[userId] = socket.id;
-    console.log(`User ${userId} mapped to socket ${socket.id}`);
-  }
-
-  io.emit("getOnlineUser", Object.keys(userSocketMap));
-
-  if (userId) {
-    socket.join(userId);
-  }
-
-  socket.on("typing", (data) => {
-    console.log(`User ${data.userId} is typing in chat ${data.chatId}`);
-    socket.to(data.chatId).emit("userTyping", {
-      chatId: data.chatId,
-      userId: data.userId,
-    });
-  });
-
-  socket.on("stopTyping", (data) => {
-    console.log(`User ${data.userId} stopped typing in chat ${data.chatId}`);
-    socket.to(data.chatId).emit("userStoppedTyping", {
-      chatId: data.chatId,
-      userId: data.userId,
-    });
-  });
-
-  socket.on("joinChat", (chatId) => {
-    socket.join(chatId);
-    console.log(`User ${userId} joined chat room ${chatId}`);
-  });
-
-  socket.on("leaveChat", (chatId) => {
-    socket.leave(chatId);
-    console.log(`User ${userId} left chat room ${chatId}`);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("User Disconnected", socket.id);
-
-    if (userId) {
-      delete userSocketMap[userId];
-      console.log(`User ${userId} removed from online users`);
-      io.emit("getOnlineUser", Object.keys(userSocketMap));
-    }
-  });
-
-  socket.on("connect_error", (error) => {
-    console.log("Socket connection Error", error);
-  });
+io.use(async (socket, next) => {
+  try {
+    if (typeof socket.handshake.auth.token !== "string") throw new Error("Missing session");
+    socket.data.user = await authenticateToken(socket.handshake.auth.token);
+    next();
+  } catch { next(new Error("Please log in again.")); }
 });
-
-export { app, server, io };
+const onlineUsers = () => [...new Set([...io.sockets.sockets.values()].map(s => s.data.user._id as string))];
+const broadcastPresence = () => io.emit("getOnlineUser", onlineUsers());
+export function isUserInChat(userId: string, chatId: string) {
+  const sockets = io.sockets.adapter.rooms.get(userId);
+  return !!sockets && [...sockets].some(id => io.sockets.sockets.get(id)?.rooms.has(chatId));
+}
+io.on("connection", socket => {
+  const userId: string = socket.data.user._id;
+  void socket.join(userId);
+  broadcastPresence();
+  socket.on("joinChat", async (chatId: unknown, ack?: (result: { ok: boolean }) => void) => {
+    try {
+      if (!isUuid(chatId)) { if (typeof ack === "function") ack({ ok: false }); return; }
+      const member = await AppDataSource.getRepository(ConversationMember).existsBy({ conversationId: chatId, userId });
+      if (!member) { if (typeof ack === "function") ack({ ok: false }); return; }
+      await socket.join(chatId);
+      if (typeof ack === "function") ack({ ok: true });
+    } catch { if (typeof ack === "function") ack({ ok: false }); }
+  });
+  socket.on("leaveChat", (chatId: unknown) => {
+    if (!isUuid(chatId) || chatId === userId) return;
+    socket.to(chatId).emit("userStoppedTyping", { chatId, userId });
+    void socket.leave(chatId);
+  });
+  let lastTyping = 0;
+  socket.on("typing", (data: { chatId?: unknown } | null) => {
+    if (!isUuid(data?.chatId) || !socket.rooms.has(data.chatId)) return;
+    if (Date.now() - lastTyping < 500) return;
+    lastTyping = Date.now();
+    socket.to(data.chatId).emit("userTyping", { chatId: data.chatId, userId });
+  });
+  socket.on("stopTyping", (data: { chatId?: unknown } | null) => {
+    if (!isUuid(data?.chatId) || !socket.rooms.has(data.chatId)) return;
+    socket.to(data.chatId).emit("userStoppedTyping", { chatId: data.chatId, userId });
+  });
+  socket.on("disconnect", broadcastPresence);
+});

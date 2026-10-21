@@ -1,39 +1,24 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
-    // File Layout
-    "rootDir": "./src",
-    "outDir": "./dist",
-
-    // Environment Settings
+    "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "target": "ES2022",
-
-    // 🔴 REQUIRED: allow custom .d.ts files
-    "typeRoots": ["./src/types", "./node_modules/@types"],
-
-    // Other Outputs
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
     "sourceMap": true,
     "declaration": true,
-    "declarationMap": true,
-
-    // Stricter Typechecking Options
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-
-    // Recommended Options
-    "strict": true,
-    "jsx": "react-jsx",
-    "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
-
-    // Keeps build clean (fine to keep)
-    "skipLibCheck": true
+    "declarationMap": true
   },
-
-  // 🔴 REQUIRED: ensure TS includes src (for .d.ts)
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

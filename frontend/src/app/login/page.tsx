@@ -2,7 +2,7 @@
 
 import Loading from "@/components/Loading";
 import { useAppData, user_service } from "@/context/AppContext";
-import axios from "axios";
+import axios, { errorMessage } from "@/lib/api";
 import { ArrowRight, Loader2, Mail } from "lucide-react";
 import { redirect, useRouter } from "next/navigation";
 import React, { useState } from "react";
@@ -26,11 +26,11 @@ const LoginPage = () => {
         email,
       });
       toast.success(data.message);
-      router.push(`/verify?email=${email}`);
-    } catch (error: any) {
+      router.push(`/verify?email=${encodeURIComponent(email)}`);
+    } catch (error: unknown) {
       console.error("Login Error:", error);
-      const errorMessage = error.response?.data?.message || "Network Error: Is the backend running?";
-      toast.error(errorMessage);
+      const message = errorMessage(error);
+      toast.error(message);
     } finally {
       setLoading(false);
     }

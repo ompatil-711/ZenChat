@@ -1,63 +1,45 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from 'dotenv';
-import connectDb from "./config/db.js";
-import { createClient } from 'redis';
+import cors from "cors";
+import { AppDataSource, initializeDatabase, safeError } from "@zenchat/database";
+import { redisClient } from "./config/redis.js";
+import { connectRabbitMQ, brokerReady, closeRabbitMQ } from "./config/rabbitmq.js";
 import userRoutes from "./routes/user.js";
-import { connectRabbitMQ } from "./config/rabbitmq.js"; // This imports the logic
-import cors from 'cors';
-
-dotenv.config();
-
-// 1. Redis Client 
-// (Make sure you add a REDIS_URL environment variable in Render if you use Redis)
-export const redisClient = createClient({
-    url: process.env.REDIS_URL as string || 'redis://localhost:6379',
-});
-
-redisClient.on('error', (err) => console.log('Redis Client Error', err));
 
 const app = express();
-
-// 2. REQUIRED UPDATE: Fix CORS to allow Render Frontend
-// Changed origin to "*" to allow your deployed frontend to access this backend
-app.use(cors({
-  origin: "*", 
-  credentials: true, 
-  methods: ["GET", "POST", "PUT", "DELETE"]
-}));
-
-// 3. JSON Middleware
-app.use(express.json());
-app.get("/", (req, res) => {
-    res.status(200).send("✅ Service is Live");
+app.use(cors({ origin: (process.env.FRONTEND_URL || "http://localhost:3000").split(",") }));
+app.use(express.json({ limit: "16kb" }));
+app.get("/", (_req, res) => { res.json({ service: "user", status: "alive" }); });
+app.get("/health/ready", async (_req, res) => {
+  let database = false;
+  try { await AppDataSource.query("SELECT 1"); database = true; } catch {}
+  const ready = database && redisClient.isReady && brokerReady();
+  res.status(ready ? 200 : 503).json({ ready, database, redis: redisClient.isReady, broker: brokerReady() });
 });
-
-// 4. Routes
 app.use("/api/v1/user", userRoutes);
 
-const port = process.env.PORT || 5000;
-
-// 5. Server Startup
-const startServer = async () => {
-    try {
-        await connectDb();
-        console.log("✅ Connected to MongoDB");
-
-        await redisClient.connect();
-        console.log("✅ Connected to Redis");
-
-        // This calls the function in your config file
-        await connectRabbitMQ();
-        console.log("✅ Connected to RabbitMQ");
-
-        app.listen(port, () => {
-            console.log(`🚀 Server is running on port ${port}`);
-        });
-
-    } catch (error) {
-        console.error("❌ Failed to start server:", error);
-        process.exit(1);
-    }
-};
-
-startServer();
+async function start() {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) throw new Error("JWT_SECRET must contain at least 32 characters.");
+  await initializeDatabase();
+  await redisClient.connect();
+  await connectRabbitMQ().catch((error: unknown) => console.error("OTP queue unavailable", safeError(error)));
+  const server = app.listen(Number(process.env.PORT || 5000), () => console.log("User API listening"));
+  server.on("error", (error) => { console.error("User listen failed", safeError(error)); void shutdown(); });
+  let stopping = false;
+  async function shutdown() {
+    if (stopping) return;
+    stopping = true;
+    server.close();
+    await closeRabbitMQ();
+    if (redisClient.isOpen) redisClient.destroy();
+    if (AppDataSource.isInitialized) await AppDataSource.destroy();
+  }
+  process.once("SIGINT", () => void shutdown());
+  process.once("SIGTERM", () => void shutdown());
+}
+void start().catch((error: unknown) => {
+  console.error("User startup failed:", error instanceof Error && /DATABASE_URL|migrations|JWT_SECRET/.test(error.message) ? error.message : safeError(error));
+  if (redisClient.isOpen) redisClient.destroy();
+  if (AppDataSource.isInitialized) void AppDataSource.destroy();
+  process.exitCode = 1;
+});

@@ -5,23 +5,25 @@ import React from "react";
 
 interface ChatHeaderProps {
   user: User | null;
+  chatId: string | null;
   setSidebarOpen: (open: boolean) => void;
   // 👇 UPDATED: Removed 'isTyping' and 'onlineUsers' props (we get them from hook now)
 }
 
 const ChatHeader = ({
   user,
+  chatId,
   setSidebarOpen,
 }: ChatHeaderProps) => {
   
   // 👇 NEW: Get live data from SocketContext
-  const { onlineUsers, typingUsers } = SocketData();
+  const { onlineUsers, typingByChat } = SocketData();
 
   // 👇 NEW: Auto-calculate if this user is online
   const isOnlineUser = user && onlineUsers?.includes(user._id);
   
   // 👇 NEW: Auto-calculate if this user is typing
-  const isTyping = user && typingUsers.includes(user._id);
+  const isTyping = user && chatId && typingByChat[chatId]?.includes(user._id);
 
   return (
     <>

@@ -5,10 +5,12 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test test/*.test.mjs",
+    "redis:verify": "node dist/verify-redis.js",
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js\""
+    "dev": "tsx watch src/index.ts",
+    "predev": "npm --prefix ../database run build"
   },
   "keywords": [],
   "author": "",
@@ -16,23 +18,19 @@
   "dependencies": {
     "amqplib": "^0.10.9",
     "cors": "^2.8.5",
-    "cros": "^1.1.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.0.1",
-    "redis": "^5.10.0"
+    "redis": "^5.10.0",
+    "@zenchat/database": "file:../database"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.8",
     "@types/cors": "^2.8.19",
-    "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/mongoose": "^5.11.96",
-    "@types/redis": "^4.0.10",
-    "concurrently": "^9.2.1",
-    "nodemon": "^3.1.11",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@types/node": "^22",
+    "tsx": "^4.20.6"
   }
 }

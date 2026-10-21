@@ -1,4 +1,4 @@
-import { User } from "@/context/AppContext";
+import type { User, Chats } from "@/context/AppContext";
 import { SocketData } from "@/context/SocketContext"; // 👈 Import the hook
 import {
   CornerDownRight,
@@ -20,7 +20,7 @@ interface ChatSidebarProps {
   setShowAllUsers: (show: boolean | ((prev: boolean) => boolean)) => void;
   users: User[] | null;
   loggedInUser: User | null;
-  chats: any[] | null;
+  chats: Chats[] | null;
   selectedUser: string | null;
   setSelectedUser: (userId: string | null) => void;
   handleLogout: () => void;

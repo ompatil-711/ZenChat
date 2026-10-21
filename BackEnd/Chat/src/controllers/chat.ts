@@ -1,323 +1,118 @@
-import axios from "axios";
+import { AppDataSource, User, Conversation, ConversationMember, Message, HttpError, isUuid, directKey, publicMessage, publicUser } from "@zenchat/database";
 import TryCatch from "../config/TryCatch.js";
-import type { AuthenticatedRequest } from "../middlewares/isAuth.js";
-import { Chat } from "../models/Chat.js";
-import { Messages } from "../models/Messages.js";
-import { getRecieverSocketId, io } from "../config/socket.js";
-
-export const createNewChat = TryCatch(async (req: AuthenticatedRequest, res) => {
-    const userId = req.user?._id;
-    const { otherUserId } = req.body;
-
-    if (!otherUserId) {
-        res.status(400).json({ message: "Other userId is required" });
-        return;
-    }
-
-    const existingChat = await Chat.findOne({
-        users: { $all: [userId, otherUserId], $size: 2 },
-    });
-
-    if (existingChat) {
-        res.json({
-            message: "Chat already exists",
-            chatId: existingChat._id,
-        });
-        return;
-    }
-
-    const newChat = await Chat.create({
-        users: [userId, otherUserId],
-    });
-    res.status(201).json({
-        message: "New chat created",
-        chatId: newChat._id,
-    });
+import { io, isUserInChat } from "../config/socket.js";
+import cloudinary from "../config/cloudinary.js";
+export const createNewChat = TryCatch(async (req, res) => {
+  const userId = req.user!._id;
+  const otherUserId: unknown = typeof req.body?.otherUserId === "string" ? req.body.otherUserId.toLowerCase() : undefined;
+  if (!isUuid(otherUserId) || otherUserId === userId) throw new HttpError(400, "Select another valid user.");
+  const chatId = await AppDataSource.transaction(async manager => {
+    if (!await manager.getRepository(User).existsBy({ id: otherUserId })) throw new HttpError(404, "User not found.");
+    const key = directKey(userId, otherUserId);
+    await manager.getRepository(Conversation).createQueryBuilder().insert().values({ directKey: key }).orIgnore().execute();
+    const chat = await manager.getRepository(Conversation).findOneByOrFail({ directKey: key });
+    await manager.getRepository(ConversationMember).createQueryBuilder().insert().values([
+      { conversationId: chat.id, userId }, { conversationId: chat.id, userId: otherUserId },
+    ]).orIgnore().execute();
+    return chat.id;
+  });
+  io.to(userId).to(otherUserId).emit("chatCreated");
+  res.status(201).json({ message: "Conversation ready", chatId });
 });
-
-export const getAllChats = TryCatch(async (req: AuthenticatedRequest, res) => {
-    const userId = req.user?._id;
-    
-    if (!userId) {
-        res.status(400).json({ message: "UserId missing" });
-        return;
-    }
-
-    const chats = await Chat.find({ users: userId }).sort({ updatedAt: -1 });
-
-    const chatWithUserData = await Promise.all(
-        chats.map(async (chat) => {
-            const otherUserId = chat.users.find((id) => id.toString() !== userId.toString());
-
-            const unseenCount = await Messages.countDocuments({
-                chatId: chat._id,
-                sender: { $ne: userId },
-                seen: false,
-            });
-
-            try {
-                const { data } = await axios.get(
-                    `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`
-                );
-                return {
-                    user: data,
-                    chat: {
-                        ...chat.toObject(),
-                        latestMessage: chat.latestMessage || null,
-                        unseenCount,
-                    },
-                };
-            } catch (error) {
-                console.log(error);
-                return {
-                    user: {
-                        _id: otherUserId,
-                        name: "Unknown User",
-                    },
-                    chat: {
-                        ...chat.toObject(),
-                        latestMessage: chat.latestMessage || null,
-                        unseenCount,
-                    },
-                };
-            }
-        })
-    );
-    res.json({
-        chats: chatWithUserData,
-    });
+interface ChatRow {
+  id: string; createdAt: Date; updatedAt: Date; latestText: string | null; latestSenderId: string | null;
+  userId: string; name: string; email: string; unseenCount: string;
+}
+export const getAllChats = TryCatch(async (req, res) => {
+  const rows = await AppDataSource.query<ChatRow[]>(`
+    SELECT c.*, u.id AS "userId", u.name, u.email,
+      (SELECT count(*) FROM messages m WHERE m."conversationId" = c.id AND m."senderId" <> $1 AND NOT m.seen) AS "unseenCount"
+    FROM conversations c
+    JOIN conversation_members mine ON mine."conversationId" = c.id AND mine."userId" = $1
+    JOIN conversation_members other ON other."conversationId" = c.id AND other."userId" <> $1
+    JOIN users u ON u.id = other."userId"
+    ORDER BY c."updatedAt" DESC, c.id DESC LIMIT 500
+  `, [req.user!._id]);
+  res.json({ chats: rows.map(row => ({
+    _id: row.id, user: { _id: row.userId, name: row.name, email: row.email },
+    chat: { _id: row.id, users: [req.user!._id, row.userId], createdAt: row.createdAt, updatedAt: row.updatedAt,
+      latestMessage: row.latestSenderId ? { text: row.latestText, sender: row.latestSenderId } : null,
+      unseenCount: Number(row.unseenCount) },
+  })) });
 });
-
-export const sendMessage = TryCatch(async(req: AuthenticatedRequest, res) => {
-    const senderId = req.user?._id;
-    const { chatId, text } = req.body;
-    const imageFile = req.file;
-
-    // --- DEBUG LOG: Check if backend received the file ---
-    if(imageFile) {
-        console.log("📸 Uploaded File Object:", imageFile);
-    } else {
-        console.log("⚠️ No file received in sendMessage controller");
-    }
-
-    if (!senderId) {
-        res.status(401).json({ message: "unauthorised" });
-        return;
-    }
-    if (!chatId) {
-        res.status(400).json({ message: "ChatId required" });
-        return;
-    }
-    if (!text && !imageFile) {
-        res.status(400).json({ message: "Either text or image is required" });
-        return;
-    }
-
-    const chat = await Chat.findById(chatId);
-
-    if (!chat) {
-        res.status(404).json({ message: "Chat not found" });
-        return;
-    }
-
-    const isUserInChat = chat.users.some(
-        (userId) => userId.toString() === senderId.toString()
-    );
-
-    if (!isUserInChat) {
-        res.status(403).json({ message: "You are not a participant of this chat" });
-        return;
-    }
-
-    const otherUserId = chat.users.find(
-        (userId) => userId.toString() !== senderId.toString()
-    );
-
-    if (!otherUserId) {
-        res.status(401).json({ message: "No other user" });
-        return;
-    }
-
-    //socket setup
-    const receiverSocketId = getRecieverSocketId(otherUserId.toString());
-  let isReceiverInChatRoom = false;
-
-  if (receiverSocketId) {
-    const receiverSocket = io.sockets.sockets.get(receiverSocketId);
-    if (receiverSocket && receiverSocket.rooms.has(chatId)) {
-      isReceiverInChatRoom = true;
-    }
-  }
-
-    let messageData: any = {
-        chatId: chatId,
-        sender: senderId,
-        seen: isReceiverInChatRoom,
-        seenAt: isReceiverInChatRoom ? new Date(): undefined,
-    };
-
-    if (imageFile) {
-        const fileUrl = imageFile.path || (imageFile as any).location || (imageFile as any).secure_url || (imageFile as any).url;
-        const fileId = imageFile.filename || (imageFile as any).id || (imageFile as any).public_id;
-
-        if (!fileUrl) {
-            console.error("❌ CRITICAL ERROR: Could not find URL in req.file object");
-        }
-
-        messageData.image = {
-            url: fileUrl,
-            publicId: fileId
-        };
-        messageData.messageType = "image";
-        messageData.text = text || "";
-    } else {
-        messageData.text = text;
-        messageData.messageType = "text"; 
-    }
-
-    const message = new Messages(messageData);
-    const savedMessage = await message.save();
-
-    // Debugging: Verify if image URL was saved
-    if (imageFile && !savedMessage.image?.url) {
-        console.error("❌ ERROR: Message saved but image URL is missing in DB:", savedMessage);
-    }
-
-    const latestMessageText = imageFile ? "📷 Image" : text;
-    
-    await Chat.findByIdAndUpdate(
-        chatId,
-        {
-            latestMessage: {
-                text: latestMessageText,
-                sender: senderId,
-            },
-            updatedAt: new Date(),
-        },
-        { new: true }
-    );
-
-    //emit to sockets
-  io.to(chatId).emit("newMessage", savedMessage);
-
-  if (receiverSocketId) {
-    io.to(receiverSocketId).emit("newMessage", savedMessage);
-  }
-
-  const senderSocketId = getRecieverSocketId(senderId.toString());
-  if (senderSocketId) {
-    io.to(senderSocketId).emit("newMessage", savedMessage);
-  }
-
-  if (isReceiverInChatRoom && senderSocketId) {
-    io.to(senderSocketId).emit("messagesSeen", {
-      chatId: chatId,
-      seenBy: otherUserId,
-      messageIds: [savedMessage._id],
+export const sendMessage = TryCatch(async (req, res) => {
+  let saved = false;
+  try {
+    const senderId = req.user!._id;
+    const chatId: unknown = req.body?.chatId;
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    if (!isUuid(chatId)) throw new HttpError(400, "Invalid conversation.");
+    if (text.length > 5000) throw new HttpError(400, "Messages may contain at most 5000 characters.");
+    if (!text && !req.file) throw new HttpError(400, "Text or an image is required.");
+    const result = await AppDataSource.transaction(async manager => {
+      const chat = await manager.getRepository(Conversation).findOne({ where: { id: chatId }, lock: { mode: "pessimistic_write" } });
+      if (!chat) throw new HttpError(404, "Conversation not found.");
+      const members = await manager.getRepository(ConversationMember).findBy({ conversationId: chatId });
+      if (!members.some(member => member.userId === senderId)) throw new HttpError(403, "You are not a participant.");
+      const other = members.find(member => member.userId !== senderId);
+      if (!other) throw new HttpError(400, "Conversation has no recipient.");
+      const seen = isUserInChat(other.userId, chatId);
+      const message = manager.getRepository(Message).create({
+        conversationId: chatId, senderId, text: text || null,
+        imageUrl: req.file?.path ?? null, imagePublicId: req.file?.filename ?? null,
+        seen, seenAt: seen ? new Date() : null,
+      });
+      await manager.getRepository(Message).save(message);
+      chat.latestText = req.file ? "📷 Image" : text;
+      chat.latestSenderId = senderId;
+      await manager.getRepository(Conversation).save(chat);
+      return { message, otherId: other.userId };
     });
+    saved = true;
+    const message = publicMessage(result.message);
+    io.to(senderId).to(result.otherId).emit("newMessage", message);
+    if (result.message.seen) io.to(senderId).emit("messagesSeen", { chatId, seenBy: result.otherId, messageIds: [result.message.id] });
+    res.status(201).json({ message, sender: senderId });
+  } finally {
+    if (!saved && req.file?.filename) await cloudinary.uploader.destroy(req.file.filename).catch(() => {});
   }
-
-    res.status(201).json({
-        message: savedMessage,
-        sender: senderId,
-    });
 });
-
- 
-export const getMessagesByChat = TryCatch(
-  async (req: AuthenticatedRequest, res) => {
-    const userId = req.user?._id;
-    const { chatId } = req.params;
-
-    if (!userId) {
-      res.status(401).json({
-        message: "Unauthorized",
-      });
-      return;
-    }
-
-    if (!chatId) {
-      res.status(400).json({
-        message: "ChatId Required",
-      });
-      return;
-    }
-
-    const chat = await Chat.findById(chatId);
-
-    if (!chat) {
-      res.status(404).json({
-        message: "Chat not found",
-      });
-      return;
-    }
-
-    const isUserInChat = chat.users.some(
-      (userId) => userId.toString() === userId.toString()
-    );
-
-    if (!isUserInChat) {
-      res.status(403).json({
-        message: "You are not a participant of this chat",
-      });
-      return;
-    }
-
-    const messagesToMarkSeen = await Messages.find({
-      chatId: chatId,
-      sender: { $ne: userId },
-      seen: false,
-    });
-
-    await Messages.updateMany(
-      {
-        chatId: chatId,
-        sender: { $ne: userId },
-        seen: false,
-      },
-      {
-        seen: true,
-        seenAt: new Date(),
-      }
-    );
-
-    const messages = await Messages.find({ chatId }).sort({ createdAt: 1 });
-
-    const otherUserId = chat.users.find((id) => id !== userId);
-
+export const getMessagesByChat = TryCatch(async (req, res) => {
+  const chatId = req.params.chatId;
+  const userId = req.user!._id;
+  if (!isUuid(chatId)) throw new HttpError(400, "Invalid conversation.");
+  let cursor: { date: string; id: string } | undefined;
+  if (typeof req.query.before === "string") {
     try {
-      const { data } = await axios.get(
-        `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`
-      );
-
-      if (!otherUserId) {
-        res.status(400).json({
-          message: "No other user",
-        });
-        return;
-      }
-
-      //socket work
-      if (messagesToMarkSeen.length > 0) {
-        const otherUserSocketId = getRecieverSocketId(otherUserId.toString());
-        if (otherUserSocketId) {
-          io.to(otherUserSocketId).emit("messagesSeen", {
-            chatId: chatId,
-            seenBy: userId,
-            messageIds: messagesToMarkSeen.map((msg) => msg._id),
-          });
-        }
-      }
-      res.json({
-        messages,
-        user: data,
-      });
-    } catch (error) {
-      console.log(error);
-      res.json({
-        messages,
-        user: { _id: otherUserId, name: "Unknown User" },
-      });
-    }
+      const decoded = JSON.parse(Buffer.from(req.query.before, "base64url").toString()) as { date: string; id: string };
+      if (!isUuid(decoded.id) || !Number.isFinite(Date.parse(decoded.date))) throw new Error("Invalid cursor");
+      cursor = decoded;
+    } catch { throw new HttpError(400, "Invalid pagination cursor."); }
   }
-);
+  const limit = 50;
+  const result = await AppDataSource.transaction(async manager => {
+    const chat = await manager.getRepository(Conversation).findOne({ where: { id: chatId }, lock: { mode: "pessimistic_write" } });
+    if (!chat) throw new HttpError(404, "Conversation not found.");
+    const members = await manager.getRepository(ConversationMember).findBy({ conversationId: chatId });
+    if (!members.some(member => member.userId === userId)) throw new HttpError(403, "You are not a participant.");
+    const other = members.find(member => member.userId !== userId)!;
+    const updated: { id: string }[] = await manager.query(
+      'UPDATE messages SET seen = true, "seenAt" = now() WHERE "conversationId" = $1 AND "senderId" <> $2 AND NOT seen RETURNING id', [chatId, userId]);
+    await manager.getRepository(ConversationMember).update({ conversationId: chatId, userId }, { lastReadAt: new Date() });
+    const query = manager.getRepository(Message).createQueryBuilder("m")
+      .where('m."conversationId" = :chatId', { chatId })
+      .addSelect(`to_char(m."createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`, "cursor_time")
+      .orderBy('m."createdAt"', "DESC").addOrderBy("m.id", "DESC").take(limit + 1);
+    if (cursor) query.andWhere('(m."createdAt", m.id) < (:date::timestamptz, :id::uuid)', cursor);
+    const { entities: messages, raw } = await query.getRawAndEntities<{ cursor_time: string }>();
+    const hasMore = messages.length > limit;
+    messages.length = Math.min(messages.length, limit);
+    const oldest = messages.at(-1);
+    const cursorTime = raw[messages.length - 1]?.cursor_time;
+    const user = await manager.getRepository(User).findOneByOrFail({ id: other.userId });
+    return { updated, messages: messages.reverse(), user, nextCursor: hasMore && oldest
+      ? Buffer.from(JSON.stringify({ date: cursorTime, id: oldest.id })).toString("base64url") : null };
+  });
+  if (result.updated.length) io.to(result.user.id).emit("messagesSeen", { chatId, seenBy: userId, messageIds: result.updated.map(message => message.id) });
+  res.json({ messages: result.messages.map(publicMessage), user: publicUser(result.user), nextCursor: result.nextCursor });
+});

@@ -5,10 +5,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test test/*.test.mjs",
+    "smtp:verify": "node dist/verify-smtp.js",
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js\""
+    "dev": "tsx watch src/index.ts"
   },
   "keywords": [],
   "author": "",
@@ -18,14 +19,15 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "nodemailer": "^7.0.11",
-    "resend": "^6.6.0"
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.8",
-    "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.6",
     "@types/nodemailer": "^7.0.4",
-    "concurrently": "^9.2.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@types/cors": "^2.8.19",
+    "@types/node": "^22",
+    "tsx": "^4.20.6"
   }
 }

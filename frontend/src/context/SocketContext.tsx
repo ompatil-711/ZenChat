@@ -1,81 +1,49 @@
 "use client";
-
-import {
-  createContext,
-  ReactNode,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-import io from "socket.io-client";
+import { createContext, useContext, useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { io } from "socket.io-client";
+import type { Socket } from "socket.io-client";
+import Cookies from "js-cookie";
 import { chat_service, useAppData } from "./AppContext";
-
+interface TypingEvent { chatId: string; userId: string }
 interface SocketContextType {
-  // 👇 UPDATED: Use 'any' to avoid type errors
-  socket: any | null;
-  onlineUsers: string[];
-  // 👇 NEW: State to store who is currently typing
-  typingUsers: string[]; 
+  socket: Socket | null; onlineUsers: string[]; typingByChat: Record<string, string[]>;
 }
-
-const SocketContext = createContext<SocketContextType>({
-  socket: null,
-  onlineUsers: [],
-  // 👇 NEW: Initialize empty
-  typingUsers: [], 
-});
-
-interface ProviderProps {
-  children: ReactNode;
-}
-
-export const SocketProvider = ({ children }: ProviderProps) => {
-  const [socket, setSocket] = useState<any | null>(null);
+const SocketContext = createContext<SocketContextType>({ socket: null, onlineUsers: [], typingByChat: {} });
+export const SocketData = () => useContext(SocketContext);
+export function SocketProvider({ children }: { children: ReactNode }) {
   const { user } = useAppData();
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
-  // 👇 NEW: Local state for typing users
-  const [typingUsers, setTypingUsers] = useState<string[]>([]); 
-
+  const [typingByChat, setTyping] = useState<Record<string, string[]>>({});
   useEffect(() => {
     if (!user?._id) return;
-
-    const newSocket = io(chat_service, {
-      query: {
-        userId: user._id,
-      },
-      transports: ["websocket"],
+    const connection = io(chat_service, {
+      auth: cb => cb({ token: Cookies.get("token") }), transports: ["websocket"],
     });
-
-    setSocket(newSocket);
-
-    newSocket.on("getOnlineUser", (users: string[]) => {
-      setOnlineUsers(users);
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    function stop({ chatId, userId }: TypingEvent) {
+      const key = chatId + ":" + userId;
+      clearTimeout(timers.get(key)); timers.delete(key);
+      setTyping(prev => ({ ...prev, [chatId]: (prev[chatId] || []).filter(id => id !== userId) }));
+    }
+    connection.on("connect", () => { setSocket(connection); setTyping({}); });
+    connection.on("disconnect", () => { setSocket(null); setOnlineUsers([]); setTyping({}); });
+    connection.on("getOnlineUser", (users: string[]) => setOnlineUsers(users));
+    connection.on("userTyping", (data: TypingEvent) => {
+      const key = data.chatId + ":" + data.userId;
+      clearTimeout(timers.get(key));
+      setTyping(prev => ({ ...prev, [data.chatId]: [...new Set([...(prev[data.chatId] || []), data.userId])] }));
+      timers.set(key, setTimeout(() => stop(data), 5000));
     });
-
-    // 👇 NEW: Listen for 'userTyping' event from backend
-    newSocket.on("userTyping", ({ userId }: { userId: string }) => {
-      setTypingUsers((prev) => {
-        if (!prev.includes(userId)) return [...prev, userId];
-        return prev;
-      });
-    });
-
-    // 👇 NEW: Listen for 'userStoppedTyping' event from backend
-    newSocket.on("userStoppedTyping", ({ userId }: { userId: string }) => {
-      setTypingUsers((prev) => prev.filter((id) => id !== userId));
-    });
-
+    connection.on("userStoppedTyping", stop);
     return () => {
-      newSocket.close();
+      timers.forEach(clearTimeout);
+      connection.disconnect();
+      connection.removeAllListeners();
     };
   }, [user?._id]);
-
-  return (
-    // 👇 UPDATED: Pass 'typingUsers' to the provider
-    <SocketContext.Provider value={{ socket, onlineUsers, typingUsers }}>
-      {children}
-    </SocketContext.Provider>
-  );
-};
-
-export const SocketData = () => useContext(SocketContext);
+  return <SocketContext.Provider value={{ socket: user ? socket : null, onlineUsers: user ? onlineUsers : [], typingByChat: user ? typingByChat : {} }}>
+    {children}
+  </SocketContext.Provider>;
+}

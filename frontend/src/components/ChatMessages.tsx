@@ -2,6 +2,7 @@ import { Message } from "@/app/chat/page";
 import { User } from "@/context/AppContext";
 import React, { useEffect, useMemo, useRef } from "react";
 import moment from "moment";
+import Image from "next/image";
 import { Check, CheckCheck } from "lucide-react";
 
 interface ChatMessagesProps {
@@ -46,13 +47,11 @@ const ChatMessages = ({
               const isSentByMe = e.sender === loggedInUser?._id;
               const uniqueKey = `${e._id}-${i}`;
 
-              // We cast to any to safely inspect all fields
-              const msgData = e as any;
+              // The API uses a single typed image shape.
+              const msgData = e;
               
               // Try to find the image for rendering (best guess)
-              const imageUrl = msgData.image 
-                ? (typeof msgData.image === 'string' ? msgData.image : msgData.image.url) 
-                : (msgData.imageUrl || msgData.fileUrl || null);
+              const imageUrl = msgData.image?.url;
 
               return (
                 <div
@@ -68,20 +67,17 @@ const ChatMessages = ({
                         : "bg-gray-700 text-white"
                     }`}
                   >
-                    {/* --- DEBUG MODE: PRINT RAW DATA --- */}
                     {e.messageType === "image" && !imageUrl && (
-                      <div className="text-[10px] font-mono bg-black/50 p-2 rounded mb-2 break-all text-yellow-300">
-                         <strong>Raw Backend Data:</strong>
-                         <pre className="whitespace-pre-wrap">
-                           {JSON.stringify(e, null, 2)}
-                         </pre>
-                      </div>
+                      <p className="text-sm text-gray-300">Image unavailable</p>
                     )}
                     
                     {/* Render Image if found */}
                     {e.messageType === "image" && imageUrl && (
                         <div className="relative group mb-1">
-                          <img
+                          <Image
+                            unoptimized
+                            width={800}
+                            height={600}
                             src={imageUrl}
                             alt="shared"
                             className="max-w-full h-auto rounded-lg"

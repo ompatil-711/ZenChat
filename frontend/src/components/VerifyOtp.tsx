@@ -1,5 +1,5 @@
 "use client"
-import axios from 'axios';
+import axios, { errorMessage } from "@/lib/api";
 import { ArrowRight, ChevronLeft, Loader2, Lock } from 'lucide-react'
 import { redirect, useRouter, useSearchParams } from 'next/navigation'
 import React, { useState, useRef, useEffect } from "react";
@@ -57,7 +57,7 @@ const VerifyOtp = () => {
         }
     }
 
-    console.log(timer);
+
 
     const router = useRouter()
 
@@ -82,7 +82,7 @@ const VerifyOtp = () => {
       toast.success(data.message)
       Cookies.set("token",data.token,{
         expires: 15,
-        secure: false,
+        secure: window.location.protocol === "https:",
         path: "/"
       });
       setOtp(["","","","","",""]);
@@ -92,8 +92,8 @@ const VerifyOtp = () => {
       fetchChats()
       fetchUsers()
 
-    } catch (error: any) {
-      setError(error.response.data.message)
+    } catch (error: unknown) {
+      setError(errorMessage(error))
     }finally{
       setloading(false);
     }
@@ -108,9 +108,9 @@ const VerifyOtp = () => {
             });
       toast.success(data.message)
       setTimer(60)
-    } catch (error: any) {
-    const errorMessage = error.response?.data?.message || "Something went wrong. Please try again.";
-    setError(errorMessage);    
+    } catch (error: unknown) {
+    const message = errorMessage(error);
+    setError(message);
   }finally{
       setResendLoading(false);
     }
@@ -169,7 +169,7 @@ const VerifyOtp = () => {
             <button
               type="submit"
               className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              //disabled={loading}
+              disabled={loading}
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
@@ -204,5 +204,3 @@ const VerifyOtp = () => {
 }
 
 export default VerifyOtp
-
-
