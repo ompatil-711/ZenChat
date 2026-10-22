@@ -123,4 +123,5 @@ The compose file binds PostgreSQL to localhost and stores data in the named volu
 - SMTP connection timeout: confirm the host permits outbound SMTP connections.
 - Login loading: inspect the actual login API request URL. Frontend requests now have a 15-second timeout and show network errors.
 - CORS: set the exact frontend origin in `FRONTEND_URL` and restart the backend.
+- Frontend renders without styling: check the emitted stylesheet, not just the build exit status. Tailwind scans `frontend/src` through the CSS-relative `source("../")` in `src/app/globals.css`. Keep the PostCSS plugin configuration independent of bundled `import.meta.url` paths. `npm run build` now checks generated CSS for required layout/color utilities and fails if they are missing. On Vercel, use Root Directory `frontend`, the Next.js framework preset, Build Command `npm run build`, and the default output directory. After deploying this fix, redeploy without the existing build cache and hard-refresh the page.
 
