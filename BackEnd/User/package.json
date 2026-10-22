@@ -7,7 +7,9 @@
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "redis:verify": "node dist/verify-redis.js",
+    "prebuild": "npm --prefix ../database run build",
     "build": "tsc",
+    "build:deploy": "npm --prefix ../database ci --include=dev && npm run build",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "predev": "npm --prefix ../database run build"

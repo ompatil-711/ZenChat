@@ -89,10 +89,20 @@ User and Chat depend on `file:../database`. Deploy from the repository checkout 
 Example User build command, from the repository root:
 
 ```sh
-npm --prefix BackEnd/database ci && npm --prefix BackEnd/database run build && npm --prefix BackEnd/User ci && npm --prefix BackEnd/User run build
+npm --prefix BackEnd/User ci --include=dev && npm --prefix BackEnd/User run build:deploy
 ```
 
 Start with `npm --prefix BackEnd/User start`. Use the analogous commands for Chat. Mail builds independently. Install devDependencies in the build stage because TypeScript is needed there.
+
+For Render's native Node runtime, leave **Root Directory empty** on User and Chat so the sibling `BackEnd/database` package is available. Use these commands:
+
+| Service | Build Command | Start Command |
+| --- | --- | --- |
+| User | `npm --prefix BackEnd/User ci --include=dev && npm --prefix BackEnd/User run build:deploy` | `npm --prefix BackEnd/User start` |
+| Chat | `npm --prefix BackEnd/Chat ci --include=dev && npm --prefix BackEnd/Chat run build:deploy` | `npm --prefix BackEnd/Chat start` |
+| Mail (Root Directory `BackEnd/Mail`) | `npm ci --include=dev && npm run build` | `npm start` |
+
+`build:deploy` installs the shared package's build dependencies. The User/Chat `prebuild` hooks compile that package before compiling the service, so the ignored `database/dist` does not need to be committed. Include `BackEnd/database/**` in any User/Chat build filters. Clear the build cache on the first deployment after correcting these settings. Existing service environment variables stay on their respective services.
 
 Run `npm --prefix BackEnd/database run migration:run` as one release step before starting the updated backends. Keep migration credentials out of logs and never use `synchronize: true` to update a live database. Reverting the initial migration drops its tables and data; do not use it as a routine restart command.
 
