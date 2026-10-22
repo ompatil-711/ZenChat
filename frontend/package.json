@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build && node scripts/check-styles.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:config": "node --test test/backend-urls.test.mjs"
   },
   "dependencies": {
     "@types/js-cookie": "^3.0.6",

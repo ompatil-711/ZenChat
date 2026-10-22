@@ -17,6 +17,8 @@ Configure these environment variables on the backend host:
 
 `FRONTEND_URL` is a comma-separated list of allowed origins, such as `https://zenchat.example,http://localhost:3000`. Public frontend URL variables must be configured before the Next.js build. Never expose database, JWT, SMTP, Redis, or broker credentials through `NEXT_PUBLIC_` variables.
 
+The frontend has no hardcoded backend fallback and does not use the legacy `NEXT_PUBLIC_BACKEND_URL`. For local development, copy `frontend/.env.example` to the ignored `.env.local`; it supplies localhost URLs for `npm run dev`. For Vercel, set both explicit backend variables in the dashboard for each deployed environment to the public HTTPS service roots, then rebuild. Changing dashboard values without rebuilding does not update an existing browser bundle. Production builds and startup reject missing, localhost, loopback/private network, and non-HTTPS URLs. This prevents the known localhost configuration from triggering Chrome's device-access prompt. `npm --prefix frontend run test:config` checks these rules without making requests.
+
 User and Chat require the same JWT secret with at least 32 characters. The apps use a small database connection pool per process. Configure the same broker and virtual host in User and Mail.
 
 ## Hosting layout

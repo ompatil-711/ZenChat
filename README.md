@@ -51,7 +51,7 @@ npm --prefix frontend run dev
 
 Backend development uses one `tsx` watcher per service. User/Chat build the shared database package before starting. Restart those services after editing shared entities or database code.
 
-The frontend defaults to local User/Chat URLs. Production deployments must explicitly set both `NEXT_PUBLIC_USER_BACKEND_URL` and `NEXT_PUBLIC_CHAT_BACKEND_URL` before building.
+The frontend requires explicit User/Chat URLs. For development, copy `frontend/.env.example` to the ignored `frontend/.env.local`; localhost URLs are allowed only during development. Production deployments must set both `NEXT_PUBLIC_USER_BACKEND_URL` and `NEXT_PUBLIC_CHAT_BACKEND_URL` to public HTTPS service roots before building. Missing or local production URLs fail the build instead of requesting access to a visitor's device.
 
 ## Database tables
 
