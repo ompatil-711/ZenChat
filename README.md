@@ -88,7 +88,7 @@ npm --prefix BackEnd/database test
 npm --prefix BackEnd/Chat test
 Remove-Item Env:RUN_DB_TESTS
 ```
-
+ 
 User's Redis integration tests use `RUN_REDIS_TESTS=1`; its live API tests use
 `RUN_API_TESTS=1`. Run `npm --prefix BackEnd/User test` with those flags to check
 atomic OTP verification and dependency readiness without sending mail.
