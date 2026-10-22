@@ -1,0 +1,67 @@
+# Uses hosted Neon, Redis, AMQP and SMTP; no local data stores are created.
+# Package .env files are runtime inputs and are never copied into images.
+services:
+  migrate:
+    profiles: [release]
+    build:
+      context: .
+      dockerfile: BackEnd/Dockerfile
+      target: migration
+    env_file: BackEnd/database/.env
+    restart: "no"
+
+  user:
+    build:
+      context: .
+      dockerfile: BackEnd/Dockerfile
+      target: runtime
+      args:
+        SERVICE: User
+    env_file: BackEnd/User/.env
+    environment:
+      PORT: "8080"
+    ports: ["127.0.0.1:5000:8080"]
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+
+  chat:
+    build:
+      context: .
+      dockerfile: BackEnd/Dockerfile
+      target: runtime
+      args:
+        SERVICE: Chat
+    env_file: BackEnd/Chat/.env
+    environment:
+      PORT: "8080"
+    ports: ["127.0.0.1:5001:8080"]
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+
+  mail:
+    build:
+      context: .
+      dockerfile: BackEnd/Mail/Dockerfile
+    env_file: BackEnd/Mail/.env
+    environment:
+      PORT: "8080"
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s

@@ -2,6 +2,7 @@
 
 A TypeScript chat application with a Next.js frontend, PostgreSQL/TypeORM, Socket.IO, Redis OTP verification, and an SMTP mail worker.
 
+
 ## Services
 
 | Directory | Responsibility | Local port |
@@ -113,5 +114,7 @@ HTTP routes and Socket.IO connections use JWT sessions. Chat reads, sends, and r
 ## Deployment and pgAdmin
 
 See [deployment setup](docs/DEPLOYMENT.md). pgAdmin can connect to the hosted database; Docker is optional and is not required when using Neon.
+
+Backend production Dockerfiles, an explicit migration image, and `compose.backend.yaml` are provided. Build from the repository root so User and Chat include the shared database package. GitHub Actions checks all four images. The Mail worker needs an always-running host that allows SMTP; confirm the plan's restrictions before deploying.
 
 `node_modules`, generated output, environment files, and local `AGENTS.md` are ignored. Existing repositories that tracked generated files need index cleanup; ignoring a file does not untrack it.

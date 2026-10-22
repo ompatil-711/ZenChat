@@ -21,6 +21,67 @@ User and Chat require the same JWT secret with at least 32 characters. The apps 
 
 ## Hosting layout
 
+### Container deployment
+
+The repository includes production images for the three backend processes and a separate migration job. All Docker builds use the **repository root** as the build context. Images run Node.js 22 as the non-root `node` user, contain production dependencies and compiled output, and retain the shared database package's sibling directory layout. `.dockerignore` excludes credentials, local dependencies and generated output from build inputs.
+
+| Process | Dockerfile | Target | Build argument | Public access |
+| --- | --- | --- | --- | --- |
+| User API | `BackEnd/Dockerfile` | `runtime` | `SERVICE=User` | HTTPS |
+| Chat API / Socket.IO | `BackEnd/Dockerfile` | `runtime` | `SERVICE=Chat` | HTTPS and WebSockets |
+| Mail consumer | `BackEnd/Mail/Dockerfile` | `runtime` | None | No public endpoint needed |
+| Database migration | `BackEnd/Dockerfile` | `migration` | None | None; one-off release job |
+
+Build sequentially from the repository root:
+
+```sh
+docker build -f BackEnd/Dockerfile --build-arg SERVICE=User -t zenchat-user .
+docker build -f BackEnd/Dockerfile --build-arg SERVICE=Chat -t zenchat-chat .
+docker build -f BackEnd/Mail/Dockerfile -t zenchat-mail .
+docker build -f BackEnd/Dockerfile --target migration -t zenchat-migrate .
+```
+
+Inject environment variables through the hosting dashboard or a private runtime env file. Images default to `PORT=8080`; a host-supplied `PORT` overrides it. Leave the image's default start command intact. No build argument should contain credentials.
+
+Keep User and Chat as separate web services and Mail as an always-running worker. Disable scale-to-zero for the worker: a queued AMQP job cannot wake an HTTP service. Keep Chat at **one replica** until a shared Socket.IO adapter and distributed presence are implemented. Use the host's HTTPS termination and WebSocket support; use `https://` base URLs in the frontend.
+
+### SMTP and hosting plans
+
+Choose the host before provisioning services. Gmail SMTP requires outbound port 465 or 587. Render Free blocks these ports, and Railway currently permits SMTP only on Pro or above. A free API deployment does not establish that the Mail worker can run there. Do not change the application to an HTTP mail API without deciding that separately.
+
+Verify these provider policies before purchase: [Render Free restrictions](https://render.com/docs/free), [Railway SMTP availability](https://docs.railway.com/networking/outbound-networking). No paid resources are provisioned by this repository.
+
+### Release order
+
+1. Build all images for the same Git revision. The `Backend deployment images` GitHub Actions workflow builds all four images and checks production module resolution without credentials or external connections. It does not publish images, run live migrations, or deploy.
+2. Confirm Neon backup/recovery coverage before applying a schema change. Supply the migration job with the **direct** Neon `DATABASE_URL` and `DATABASE_SSL=true`. User and Chat can use the pooled connection URL for the same database and branch.
+3. Run the migration job once and require a successful exit before releasing User and Chat. For Docker, use `docker run --rm --env-file BackEnd/database/.env zenchat-migrate`. Do not run migrations in each API start command. The current migration creates the initial schema; future rolling releases need backward-compatible migrations.
+4. Deploy Mail with broker and SMTP settings. Use its private console to run `node dist/verify-smtp.js` if SMTP diagnosis is needed; verification authenticates without sending mail. Confirm `/health/ready` returns 200 inside the service network.
+5. Deploy User and Chat with the same database and JWT secret. Set `FRONTEND_URL` to the exact frontend origins, without trailing slashes or paths. Confirm `/health/ready` returns 200 on each service.
+6. Set the frontend's two public backend URLs to the new HTTPS service addresses, then rebuild/redeploy the frontend. These are service roots, without `/api/v1` appended.
+7. Exercise login and OTP delivery, then text/image delivery and read receipts between two accounts. Check reconnects and presence. A successful health check alone does not prove these flows.
+
+Use `/` for routine platform liveness checks. Use `/health/ready` after deployments and during diagnosis; frequent database readiness polling can keep Neon awake. Configure restart-on-failure and a graceful termination window of at least 30 seconds. Redact credentials and OTPs from exported logs.
+
+To roll back code, deploy the previous images. Do not automatically revert database migrations: a revert can delete data or break the still-running release.
+
+### Optional local container rehearsal
+
+Start Docker Desktop first. The following uses your existing package `.env` files and hosted dependencies; it does not create local databases. Stop existing User/Chat terminal servers before binding their ports.
+
+```sh
+docker compose -f compose.backend.yaml config --quiet
+docker compose -f compose.backend.yaml build
+docker compose -f compose.backend.yaml --profile release run --rm migrate
+docker compose -f compose.backend.yaml up -d user chat mail
+docker compose -f compose.backend.yaml ps
+docker compose -f compose.backend.yaml logs --tail 50
+```
+
+User and Chat bind only to localhost at ports 5000 and 5001. Mail has no published port. `docker compose -f compose.backend.yaml down` stops these local processes; hosted Neon/Redis/AMQP data remains on those providers. This Compose file has no public TLS proxy and is intended for local rehearsal, not direct Internet exposure on a server.
+
+### Native Node deployment alternative
+
 User and Chat depend on `file:../database`. Deploy from the repository checkout with the sibling database directory available; do not upload only the individual service directory.
 
 Example User build command, from the repository root:

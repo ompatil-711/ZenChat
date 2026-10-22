@@ -1,0 +1,52 @@
+name: Backend deployment images
+
+on:
+  push:
+    paths: ["BackEnd/**", ".dockerignore", "compose.backend.yaml", ".github/workflows/backend-images.yml"]
+  pull_request:
+    paths: ["BackEnd/**", ".dockerignore", "compose.backend.yaml", ".github/workflows/backend-images.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: user
+            dockerfile: BackEnd/Dockerfile
+            target: runtime
+            service: User
+            modules: "express,@zenchat/database"
+          - name: chat
+            dockerfile: BackEnd/Dockerfile
+            target: runtime
+            service: Chat
+            modules: "express,socket.io,@zenchat/database"
+          - name: mail
+            dockerfile: BackEnd/Mail/Dockerfile
+            target: runtime
+            service: Mail
+            modules: "express,nodemailer,amqplib"
+          - name: migration
+            dockerfile: BackEnd/Dockerfile
+            target: migration
+            service: User
+            modules: "typeorm,pg"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: >-
+          docker build --file ${{ matrix.dockerfile }}
+          --target ${{ matrix.target }} --build-arg SERVICE=${{ matrix.service }}
+          --tag zenchat-${{ matrix.name }}:check .
+      - name: Check installed production dependencies without external connections
+        run: >-
+          docker run --rm --network none --entrypoint node
+          zenchat-${{ matrix.name }}:check --input-type=module
+          -e "for (const name of '${{ matrix.modules }}'.split(',')) await import(name)"
