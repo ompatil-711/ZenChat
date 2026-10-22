@@ -2,7 +2,7 @@
 
 A TypeScript chat application with a Next.js frontend, PostgreSQL/TypeORM, Socket.IO, Redis OTP verification, and an SMTP mail worker.
 
-## Services
+## Services 
 
 | Directory | Responsibility | Local port |
 | --- | --- | --- |
